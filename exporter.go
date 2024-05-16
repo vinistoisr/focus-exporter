@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
@@ -12,7 +13,7 @@ func main() {
 	reg := prometheus.NewRegistry()
 
 	// Create some standard server metrics.
-	goCollector := prometheus.NewGoCollector()
+	goCollector := collectors.NewGoCollector()
 
 	// Register our metrics with our registry.
 	reg.MustRegister(goCollector)

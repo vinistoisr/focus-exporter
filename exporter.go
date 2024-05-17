@@ -54,8 +54,6 @@ func main() {
 	http.Handle("/metrics", promhttp.HandlerFor(reg, promhttp.HandlerOpts{}))
 	go http.ListenAndServe(":9183", nil)
 
-	lastInputTime := inactivity.GetTickCount()
-
 	// Main loop
 	for {
 		// Get Active Window Information
@@ -66,23 +64,23 @@ func main() {
 			fmt.Println("Window Title:", windowInfo.Title)
 			fmt.Println("Process ID:", windowInfo.ProcessID)
 			fmt.Println("Process Name:", windowInfo.ProcessName)
+			// Reset the gauge
+			windowPidGauge.Reset()
 
 			// Update Prometheus gauge metric
 			windowPidGauge.WithLabelValues(windowInfo.Hostname, windowInfo.Username, windowInfo.Title, windowInfo.ProcessName).Set(float64(windowInfo.ProcessID))
 		}
 
 		// Get inactivity time
-		inactivityTime, shouldIncrementCounter := inactivity.GetInactivityTime(inactivityThreshold, lastInputTime)
+		inactivityTime, shouldIncrementCounter := inactivity.GetInactivityTime(inactivityThreshold)
 		fmt.Println("Inactivity:", inactivityTime)
 
-		// Update Prometheus counter metric ONLY if inactive for a whole second
+		// Update Prometheus counter metric ONLY if inactive for the threshold duration
 		if shouldIncrementCounter {
 			inactivityMetric.WithLabelValues(windowInfo.Hostname, windowInfo.Username).Inc()
-			lastInputTime = inactivity.GetTickCount() // Reset lastInputTime if counter was incremented
 		}
 
 		time.Sleep(1 * time.Second)
 		fmt.Println("------------")
 	}
-
 }

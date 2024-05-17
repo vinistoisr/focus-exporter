@@ -6,14 +6,16 @@ import (
 	"syscall"
 	"unsafe"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"golang.org/x/sys/windows"
 )
 
 var (
-	user32      = syscall.NewLazyDLL("user32.dll")
-	kernel32    = syscall.NewLazyDLL("kernel32.dll")
-	openProcess = kernel32.NewProc("OpenProcess")
-	closeHandle = kernel32.NewProc("CloseHandle")
+	user32                  = syscall.NewLazyDLL("user32.dll")
+	kernel32                = syscall.NewLazyDLL("kernel32.dll")
+	openProcess             = kernel32.NewProc("OpenProcess")
+	closeHandle             = kernel32.NewProc("CloseHandle")
+	currentForegroundWindow windows.HWND
 )
 
 // ActiveWindowInfo struct to hold information about the active window
@@ -26,7 +28,7 @@ type ActiveWindowInfo struct {
 }
 
 // GetActiveWindowInfo retrieves information about the active window
-func GetActiveWindowInfo() (ActiveWindowInfo, error) {
+func GetActiveWindowInfo(focusChangeCounter prometheus.CounterVec) (ActiveWindowInfo, error) {
 	hwnd := getForegroundWindow()
 	if hwnd == 0 {
 		return ActiveWindowInfo{}, fmt.Errorf("could not get foreground window")
@@ -47,6 +49,12 @@ func GetActiveWindowInfo() (ActiveWindowInfo, error) {
 	}
 
 	username := os.Getenv("USERNAME")
+
+	// If the foreground window has changed, increment the focus change counter
+	if hwnd != currentForegroundWindow {
+		currentForegroundWindow = hwnd
+		focusChangeCounter.WithLabelValues(hostname, username).Inc()
+	}
 
 	return ActiveWindowInfo{
 		Title:       title,

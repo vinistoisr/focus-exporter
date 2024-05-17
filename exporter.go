@@ -9,9 +9,9 @@ import (
 	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
-	"/internal/windowinfo"
+	"github.com/VinistoisR/focus-exporter/internal/windowinfo"
 
-	"./internal/inactivity"
+	"github.com/VinistoisR/focus-exporter/internal/inactivity"
 )
 
 func main() {

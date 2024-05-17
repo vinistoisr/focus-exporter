@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"net/http"
 	"time"
@@ -14,6 +15,15 @@ import (
 	"github.com/VinistoisR/focus-exporter/internal/inactivity"
 )
 
+// inactivityThresholdSec is the threshold in seconds for inactivity
+
+var inactivityThresholdSec uint64
+
+// init is called before main
+func init() {
+	flag.Uint64Var(&inactivityThresholdSec, "inactivityThreshold", 10, "The inactivity threshold in seconds")
+}
+
 func main() {
 	// Request administrator privileges (uncomment when needed)
 	// if !amAdmin() {
@@ -21,7 +31,9 @@ func main() {
 	// 	return
 	// }
 
-	const inactivityThreshold = 5000 // 5 seconds in milliseconds
+	flag.Parse()
+	inactivityThreshold := inactivityThresholdSec * 1000
+	fmt.Printf("Inactivity Threshold: %d milliseconds\n", inactivityThreshold)
 
 	// Prometheus Metrics Setup
 	reg := prometheus.NewRegistry()

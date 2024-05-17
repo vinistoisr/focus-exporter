@@ -19,18 +19,16 @@ type LASTINPUTINFO struct {
 	dwTime uint32
 }
 
-func GetInactivityTime(inactivityThreshold uint64, inactivityCounter time.Duration) time.Duration {
-	lastInputTime := getLastInputTime()
-	currentTime := getTickCount()
+// GetInactivityTime retrieves the last input time in milliseconds
+func GetInactivityTime(inactivityThreshold uint64, lastInputTime uint64) (time.Duration, bool) {
+	currentTime := GetTickCount()
 	elapsed := currentTime - lastInputTime
 
 	fmt.Println("Elapsed Time (ms):", elapsed)
-
-	if elapsed > inactivityThreshold {
-		inactivityCounter += time.Second // Increment if inactive
-	}
-
-	return inactivityCounter
+	fmt.Println("Converted time (ms):", uint64(lastInputTime))
+	inactivityTime := time.Duration(elapsed) * time.Millisecond
+	shouldIncrementCounter := inactivityTime >= time.Second
+	return inactivityTime, shouldIncrementCounter
 }
 
 // getLastInputTime retrieves the last input time in milliseconds
@@ -44,13 +42,10 @@ func getLastInputTime() uint64 {
 		return 0
 	}
 
-	fmt.Println("Raw dwTime:", lastInputInfo.dwTime)
-	fmt.Println("Converted time (ms):", uint64(lastInputInfo.dwTime))
-
 	return uint64(lastInputInfo.dwTime) // Return time in milliseconds
 }
 
-func getTickCount() uint64 {
+func GetTickCount() uint64 {
 	ret, _, _ := getTickCount64.Call()
 	return uint64(ret)
 }

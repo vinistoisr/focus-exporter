@@ -11,9 +11,7 @@ import (
 
 	"/internal/windowinfo"
 
-	"./internal/windowinfo"
-	"github.com/VinistoisR/focus-exporter/internal/inactivity"
-	"github.com/VinistoisR/focus-exporter/internal/windowinfo"
+	"./internal/inactivity"
 )
 
 func main() {

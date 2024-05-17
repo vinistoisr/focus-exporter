@@ -4,7 +4,7 @@ go 1.22.3
 
 require (
 	github.com/lxn/win v0.0.0-20210218163916-a377121e959e
-	golang.org/x/sys v0.17.0
+	golang.org/x/sys v0.20.0
 )
 
 require (

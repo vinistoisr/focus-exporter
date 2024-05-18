@@ -2,23 +2,29 @@
 
 ## Introduction
 
-Focus Exporter is a tool inspired by Microsoft Viva Insights, designed to help you collect and monitor metrics about your time spent in various applications and meetings on Windows. This project was a great opportunity to learn Go and delve into the world of performance metrics.
+Focus Exporter is a Prometheus Exporter for Windows, designed to collect and monitor metrics about your time spent on Windows. 
 
-Heavily inspired by the Windows Exporter, Focus Exporter uses a combination of Windows API calls and Prometheus to collect and expose metrics about active windows, user inactivity, and focused window durations. 
+Heavily inspired by the [Windows Exporter]([url](https://github.com/prometheus-community/windows_exporter)), Focus Exporter uses a combination of Windows API calls to collect and expose metrics about active windows, user inactivity, and focused window durations.
+
+By default, exposes a prometheus metrics endpoing at ```http://localhost:9183/metrics```
 
 ## Motivation
 
-Microsoft Viva Insights offers great metrics, but they are part of a broader suite of services. Focus Exporter is my effort to collect these metrics independently. This project allowed me to learn Go and leverage the power of AI tools like GitHub Copilot, Google AI Studio, and ChatGPT.
+Microsoft Viva Insights offers great metrics, but they are part of a broader suite of services through office 365. Focus Exporter is my effort to collect a subset of these metrics independently. This project is my first project in Golang, any feedback is very appreciated. 
 
 ## Features
 
 - Collects metrics about focused windows and user inactivity.
-- Tracks time spent in meetings for applications like Microsoft Teams and Zoom.
+- Attempts to track time spent in meetings for applications like Microsoft Teams and Zoom.
 - Exposes metrics through a Prometheus endpoint.
 - Configurable through command-line parameters.
-- Supports privacy mode to avoid exposing sensitive window titles.
+- privacy mode to avoid exposing sensitive window titles.
 
 ## Usage
+
+This Prometheus Exporter creates and endpoint at ```http://$host:$port/metrics``` that must be scraped by a [Prometheus]([url](https://github.com/prometheus-community)) metrics server. From there, the data can be visualized in a program such as [Grafana]([url](https://github.com/grafana/grafana)). 
+
+This does _not_ need to be ran as a Priviledged Administrator user. 
 
 ### Command-line Parameters
 
@@ -32,23 +38,23 @@ Microsoft Viva Insights offers great metrics, but they are part of a broader sui
 
 #### Default Usage
 
-```focus-exporter```
+```focus-exporter``` This will start a server at ```http://localhost:9183/metrics``` and expose all metrics.
 
 #### Custom Inactivity Threshold
 
-```focus-exporter -inactivityThreshold 120```
+```focus-exporter -inactivityThreshold 120``` This will start a server at ```http://localhost:9183/metrics``` with an inactivity threshold of 2 minutes. 
 
 #### Specify Network Interface and Port
 
-```focus-exporter -interface 192.168.1.1 -port 9090```
+```focus-exporter -interface 192.168.1.1 -port 9090``` This will start a server at ```http://localhost:9000/metrics``` and expose all metrics.
 
 #### Enable Privacy Mode
 
-```focus-exporter -private```
+```focus-exporter -private``` This will start a server at ```http://localhost:9183/metrics``` and will not expose the full Window_Title in metric labels.
 
 #### Enable Debug Mode
 
-```focus-exporter -debug```
+```focus-exporter -debug``` This will start a server with debugging, which prints collected values to the console. 
 
 ## Metrics
 
@@ -69,24 +75,24 @@ Focus Exporter exposes the following metrics:
     ```cd focus-exporter```
 
 3. Build the project:
-    ```go build -o focus-exporter main.go```
+    ```go build -ldflags -H=windowsgui exporter.go```
 
 4. Run the exporter:
-    ```./focus-exporter```
+    ```./exporter.exe``` optional flags ```-debug -interface <ip or hostname> -port <port> --inactivityThreshold -private```
 
 ## Acknowledgments
 
 This project wouldn't have been possible without the help of several AI tools and open-source libraries:
 
-- **GitHub Copilot**: For code suggestions and completions.
-- **Google AI Studio**: For powerful AI insights and recommendations.
-- **ChatGPT**: For answering countless questions and providing guidance.
+- **GitHub Copilot**
+- **Google AI Studio**
+- **ChatGPT**
 
 ### Libraries Used
 
 - **Prometheus Client Golang**: For metrics collection and exposition.
 - **golang/sys/windows**: For Windows system calls and API interactions.
 
-Special thanks to the authors of these libraries and the broader open-source community for their invaluable contributions.
+Special thanks to the authors of these libraries and the broader open-source community.
 
 

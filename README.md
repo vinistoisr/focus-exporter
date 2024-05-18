@@ -4,7 +4,7 @@
 
 Focus Exporter is a Prometheus Exporter for Windows, designed to collect and monitor metrics about your time spent on Windows. 
 
-Heavily inspired by the [Windows Exporter]([url](https://github.com/prometheus-community/windows_exporter)), Focus Exporter uses a combination of Windows API calls to collect and expose metrics about active windows, user inactivity, and focused window durations.
+Heavily inspired by the [Windows Exporter](https://github.com/prometheus-community/windows_exporter), Focus Exporter uses a combination of Windows API calls to collect and expose metrics about active windows, user inactivity, and focused window durations.
 
 By default, exposes a prometheus metrics endpoing at ```http://localhost:9183/metrics```
 
@@ -22,9 +22,11 @@ Microsoft Viva Insights offers great metrics, but they are part of a broader sui
 
 ## Usage
 
-This Prometheus Exporter creates and endpoint at ```http://$host:$port/metrics``` that must be scraped by a [Prometheus]([url](https://github.com/prometheus-community)) metrics server. From there, the data can be visualized in a program such as [Grafana]([url](https://github.com/grafana/grafana)). 
+Serves an endpoint at ```http://$host:$port/metrics``` that must be scraped by a [Prometheus](https://github.com/prometheus-community) metrics server. Data can be visualized in a program such as [Grafana](https://github.com/grafana/grafana). Example dashboards coming soon. 
 
-This does _not_ need to be ran as a Priviledged Administrator user. 
+This does _not_ need to be ran as a Priviledged user. 
+
+A scheduled task can be used to run this service at logon. 
 
 ### Command-line Parameters
 

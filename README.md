@@ -67,6 +67,7 @@ Focus Exporter exposes the following metrics:
 - `focused_window_changes_total`: Total number of times the focused window has changed.
 - `focused_window_duration_seconds`: Duration in seconds the window has been focused.
 - `meeting_duration_seconds`: Duration in seconds spent in a meeting.
+- Standard suite of go application metrics as collected by Prometheus Golang client Library
 
 ## Installation
 
@@ -80,7 +81,9 @@ Focus Exporter exposes the following metrics:
     ```go build -ldflags -H=windowsgui exporter.go```
 
 4. Run the exporter:
-    ```./exporter.exe``` optional flags ```-debug -interface <ip or hostname> -port <port> --inactivityThreshold -private```
+    ```./exporter.exe```
+   (with optional flags):
+    ```./exporter.exe -debug -interface <ip or hostname> -port <port> --inactivityThreshold -private```
 
 ## Acknowledgments
 

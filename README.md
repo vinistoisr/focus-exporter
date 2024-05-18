@@ -1,5 +1,8 @@
 # Focus Exporter
 
+![image](https://github.com/VinistoisR/focus-exporter/assets/36953653/41c6a33e-3d3a-49da-872c-719c0c4e16f2)
+
+
 ## Introduction
 
 Focus Exporter is a Prometheus Exporter for Windows, designed to collect and monitor metrics about your time spent on Windows. 

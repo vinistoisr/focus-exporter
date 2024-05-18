@@ -95,8 +95,8 @@ This project wouldn't have been possible without the help of several AI tools an
 
 ### Libraries Used
 
-- **Prometheus Client Golang**: For metrics collection and exposition.
-- **golang/sys/windows**: For Windows system calls and API interactions.
+- **[Prometheus Client Golang](https://pkg.go.dev/github.com/prometheus/client_golang/prometheus)**: For metrics collection and exposition.
+- **[golang/sys/windows](https://pkg.go.dev/golang.org/x/sys/windows)**: For Windows system calls and API interactions.
 
 Special thanks to the authors of these libraries and the broader open-source community.
 

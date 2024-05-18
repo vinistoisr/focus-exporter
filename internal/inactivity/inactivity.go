@@ -25,8 +25,8 @@ func GetInactivityTime(inactivityThreshold uint64) (time.Duration, bool) {
 	currentTime := GetTickCount()
 	elapsed := currentTime - lastInputTime
 
-	fmt.Println("Elapsed Time (ms):", elapsed)
-	fmt.Println("Converted time (ms):", uint64(lastInputTime))
+	//	fmt.Println("Elapsed Time (ms):", elapsed)
+	//	fmt.Println("Converted time (ms):", uint64(lastInputTime))
 	inactivityTime := time.Duration(elapsed) * time.Millisecond
 	shouldIncrementCounter := inactivityTime >= time.Duration(inactivityThreshold)*time.Millisecond
 	return inactivityTime, shouldIncrementCounter

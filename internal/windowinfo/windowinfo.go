@@ -3,9 +3,14 @@ package windowinfo
 import (
 	"fmt"
 	"os"
+	"regexp"
+	"strings"
+	"sync"
 	"syscall"
+	"time"
 	"unsafe"
 
+	"github.com/VinistoisR/focus-exporter/internal/inactivity"
 	"github.com/prometheus/client_golang/prometheus"
 	"golang.org/x/sys/windows"
 )
@@ -16,6 +21,9 @@ var (
 	openProcess             = kernel32.NewProc("OpenProcess")
 	closeHandle             = kernel32.NewProc("CloseHandle")
 	currentForegroundWindow windows.HWND
+	LastWindowInfo          ActiveWindowInfo
+	LastWindowFocusTime     time.Time
+	mutex                   sync.Mutex
 )
 
 // ActiveWindowInfo struct to hold information about the active window
@@ -111,4 +119,65 @@ func getProcessName(processID uint32) string {
 		return ""
 	}
 	return windows.UTF16ToString(processName[:])
+}
+
+func ExtractMeetingSubject(title string) string {
+	re := regexp.MustCompile(`Meeting\s*(.*)`)
+	matches := re.FindStringSubmatch(title)
+	if len(matches) > 1 {
+		return strings.TrimSpace(matches[1])
+	}
+	return ""
+}
+
+func ProcessWindowInfo(inactivityThreshold uint64, privateMode bool, debugMode bool,
+	focusChangeCounter, focusedWindowDuration, meetingDuration, inactivityMetric *prometheus.CounterVec, windowPidGauge *prometheus.GaugeVec) {
+	windowInfo, err := GetActiveWindowInfo(*focusChangeCounter)
+	if err != nil {
+		if debugMode {
+			fmt.Println("Error getting window information:", err)
+		}
+		return
+	}
+
+	if debugMode {
+		fmt.Println("Window Title:", windowInfo.Title)
+		fmt.Println("Process ID:", windowInfo.ProcessID)
+		fmt.Println("Process Name:", windowInfo.ProcessName)
+		fmt.Println("Hostname:", windowInfo.Hostname)
+		fmt.Println("Username:", windowInfo.Username)
+	}
+
+	mutex.Lock()
+	defer mutex.Unlock()
+
+	windowTitle := windowInfo.Title
+	if privateMode {
+		windowTitle = windowInfo.ProcessName
+	}
+
+	windowPidGauge.Reset()
+	windowPidGauge.WithLabelValues(windowInfo.Hostname, windowInfo.Username, windowTitle, windowInfo.ProcessName).Set(float64(windowInfo.ProcessID))
+
+	if windowInfo != LastWindowInfo {
+		duration := time.Since(LastWindowFocusTime).Seconds()
+		focusedWindowDuration.WithLabelValues(LastWindowInfo.Hostname, LastWindowInfo.Username, LastWindowInfo.ProcessName).Add(duration)
+
+		if (windowInfo.ProcessName == "ms-teams.exe" || windowInfo.ProcessName == "zoom.exe") && strings.Contains(windowInfo.Title, "Meeting") {
+			meetingSubject := ExtractMeetingSubject(windowInfo.Title)
+			meetingDuration.WithLabelValues(windowInfo.Hostname, windowInfo.Username, meetingSubject).Add(duration)
+		}
+
+		LastWindowInfo = windowInfo
+		LastWindowFocusTime = time.Now()
+	}
+
+	inactivityTime, shouldIncrementCounter := inactivity.GetInactivityTime(inactivityThreshold)
+	if debugMode {
+		fmt.Println("Inactivity:", inactivityTime)
+	}
+
+	if shouldIncrementCounter {
+		inactivityMetric.WithLabelValues(windowInfo.Hostname, windowInfo.Username).Inc()
+	}
 }

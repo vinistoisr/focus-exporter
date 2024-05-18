@@ -1,6 +1,6 @@
 # Focus Exporter
 
-![image](https://github.com/VinistoisR/focus-exporter/assets/36953653/41c6a33e-3d3a-49da-872c-719c0c4e16f2)
+![focus-exporter-screenshot](https://github.com/VinistoisR/focus-exporter/assets/36953653/9405ee83-0a06-47bc-ac44-b3654f787445)
 
 
 ## Introduction

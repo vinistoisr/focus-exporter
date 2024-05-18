@@ -4,9 +4,9 @@
 
 Focus Exporter is a Prometheus Exporter for Windows, designed to collect and monitor metrics about your time spent on Windows. 
 
-Heavily inspired by the [Windows Exporter](https://github.com/prometheus-community/windows_exporter), Focus Exporter uses a combination of Windows API calls to collect and expose metrics about active windows, user inactivity, and focused window durations.
+Inspired by [Windows-Exporter](https://github.com/prometheus-community/windows_exporter), Focus Exporter uses a combination of Windows API calls to collect and expose metrics about active windows, user inactivity, and focused window durations.
 
-By default, exposes a prometheus metrics endpoing at ```http://localhost:9183/metrics```
+By default, exposes a prometheus metrics endpoint at ```http://localhost:9183/metrics```
 
 ## Motivation
 
@@ -36,54 +36,60 @@ A scheduled task can be used to run this service at logon.
 - `-private`: When true, the window title will be replaced with the process name for increased privacy.
 - `-debug`: When true, output all values to the console.
 
-### Example Commands
+### Example Commands:
 
-#### Default Usage
+#### Default
 
-```focus-exporter``` This will start a server at ```http://localhost:9183/metrics``` and expose all metrics.
+```>./focus-exporter``` This will start a server at ```http://localhost:9183/metrics``` and expose all metrics.
 
 #### Custom Inactivity Threshold
 
-```focus-exporter -inactivityThreshold 120``` This will start a server at ```http://localhost:9183/metrics``` with an inactivity threshold of 2 minutes. 
+```>./focus-exporter -inactivityThreshold 120``` This will start a server at ```http://localhost:9183/metrics``` with an inactivity threshold of 2 minutes. 
 
 #### Specify Network Interface and Port
 
-```focus-exporter -interface 192.168.1.1 -port 9090``` This will start a server at ```http://localhost:9000/metrics``` and expose all metrics.
+```>./focus-exporter -interface 192.168.1.1 -port 9090``` This will start a server at ```http://localhost:9000/metrics``` and expose all metrics.
 
-#### Enable Privacy Mode
+#### Privacy Mode
 
-```focus-exporter -private``` This will start a server at ```http://localhost:9183/metrics``` and will not expose the full Window_Title in metric labels.
+```>./focus-exporter -private``` This will start a server at ```http://localhost:9183/metrics``` and will not expose the full Window_Title in metric labels.
 
-#### Enable Debug Mode
+#### Debug Mode
 
-```focus-exporter -debug``` This will start a server with debugging, which prints collected values to the console. 
+```>./focus-exporter -debug``` This will start a server with debugging, which prints collected values to the console. 
 
 ## Metrics
 
 Focus Exporter exposes the following metrics:
 
-- `focused_window_pid`: Process ID of the currently focused window.
-- `focus_inactivity_seconds_total`: Total seconds of user inactivity.
-- `focused_window_changes_total`: Total number of times the focused window has changed.
-- `focused_window_duration_seconds`: Duration in seconds the window has been focused.
-- `meeting_duration_seconds`: Duration in seconds spent in a meeting.
-- Standard suite of go application metrics as collected by Prometheus Golang client Library
+| Metric Name                           | Description                                        | Labels                                   | Type    |
+|---------------------------------------|----------------------------------------------------|------------------------------------------|---------|
+| `focused_window_pid`                  | Process ID of the currently focused window         | `hostname`, `username`, `window_title`, `process_name` | Gauge   |
+| `focus_inactivity_seconds_total`      | Total seconds of user inactivity                   | `hostname`, `username`                   | Counter |
+| `focused_window_changes_total`        | Total number of times the focused window has changed | `hostname`, `username`                   | Counter |
+| `focused_window_duration_seconds`     | Duration in seconds the window has been focused    | `hostname`, `username`, `process_name`   | Counter |
+| `meeting_duration_seconds`            | Duration in seconds spent in a meeting             | `hostname`, `username`, `meeting_subject` | Counter |
+| `go_*`                                | Standard suite of Go application metrics           | Various                                  | Various |
+
+
 
 ## Installation
 
 1. Clone the repository:
-    ```git clone https://github.com/yourusername/focus-exporter.git```
+    ```>git clone https://github.com/yourusername/focus-exporter.git```
 
 2. Navigate to the project directory:
-    ```cd focus-exporter```
+    ```>cd focus-exporter```
 
 3. Build the project:
-    ```go build -ldflags -H=windowsgui exporter.go```
+    ```>go build -ldflags -H=windowsgui exporter.go```
 
 4. Run the exporter:
-    ```./exporter.exe```
+    ```>./exporter.exe```
+
    (with optional flags):
-    ```./exporter.exe -debug -interface <ip or hostname> -port <port> --inactivityThreshold -private```
+   
+    ```>./exporter.exe -debug -interface <ip or hostname> -port <port> --inactivityThreshold -private```
 
 ## Acknowledgments
 

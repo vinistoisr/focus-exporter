@@ -20,6 +20,21 @@ Microsoft Viva Insights offers great metrics, but they are part of a broader sui
 - Configurable through command-line parameters.
 - privacy mode to avoid exposing sensitive window titles.
 
+## Metrics
+
+Focus Exporter exposes the following metrics:
+
+| Metric Name                           | Description                                        | Labels                                   | Type    |
+|---------------------------------------|----------------------------------------------------|------------------------------------------|---------|
+| `focused_window_pid`                  | Process ID of the currently focused window         | `hostname`, `username`, `window_title`, `process_name` | Gauge   |
+| `focus_inactivity_seconds_total`      | Total seconds of user inactivity                   | `hostname`, `username`                   | Counter |
+| `focused_window_changes_total`        | Total number of times the focused window has changed | `hostname`, `username`                   | Counter |
+| `focused_window_duration_seconds`     | Duration in seconds the window has been focused    | `hostname`, `username`, `process_name`   | Counter |
+| `meeting_duration_seconds`            | Duration in seconds spent in a meeting             | `hostname`, `username`, `meeting_subject` | Counter |
+| `go_*`                                | Standard suite of Go application metrics           | Various                                  | Various |
+
+
+
 ## Usage
 
 Serves an endpoint at ```http://$host:$port/metrics``` that must be scraped by a [Prometheus](https://github.com/prometheus-community) metrics server. Data can be visualized in a program such as [Grafana](https://github.com/grafana/grafana). Example dashboards coming soon. 
@@ -57,21 +72,6 @@ A scheduled task can be used to run this service at logon.
 #### Debug Mode
 
 ```>./focus-exporter -debug``` This will start a server with debugging, which prints collected values to the console. 
-
-## Metrics
-
-Focus Exporter exposes the following metrics:
-
-| Metric Name                           | Description                                        | Labels                                   | Type    |
-|---------------------------------------|----------------------------------------------------|------------------------------------------|---------|
-| `focused_window_pid`                  | Process ID of the currently focused window         | `hostname`, `username`, `window_title`, `process_name` | Gauge   |
-| `focus_inactivity_seconds_total`      | Total seconds of user inactivity                   | `hostname`, `username`                   | Counter |
-| `focused_window_changes_total`        | Total number of times the focused window has changed | `hostname`, `username`                   | Counter |
-| `focused_window_duration_seconds`     | Duration in seconds the window has been focused    | `hostname`, `username`, `process_name`   | Counter |
-| `meeting_duration_seconds`            | Duration in seconds spent in a meeting             | `hostname`, `username`, `meeting_subject` | Counter |
-| `go_*`                                | Standard suite of Go application metrics           | Various                                  | Various |
-
-
 
 ## Installation
 

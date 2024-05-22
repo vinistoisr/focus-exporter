@@ -1,4 +1,4 @@
-module github.com/VinistoisR/focus-exporter
+module github.com/vinistoisr/focus-exporter
 
 go 1.22
 

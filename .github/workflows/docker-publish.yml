@@ -1,0 +1,71 @@
+# Name of the GitHub Actions workflow
+name: Docker
+
+# Triggers for the workflow
+on:
+  # Scheduled trigger, runs at 6:27 every day
+  schedule:
+    - cron: '27 6 * * *'
+  # Triggered when a push to the "main" branch occurs
+  push:
+    branches: [ "main" ]
+    # Triggered when a new tag is created
+    tags: [ 'v*.*.*' ]
+  # Triggered when a pull request to the "main" branch is created
+  pull_request:
+    branches: [ "main" ]
+
+# Environment variables used in the workflow
+env:
+  # The Docker registry to use
+  REGISTRY: ghcr.io
+  # The name of the Docker image
+  IMAGE_NAME: ${{ github.repository }}
+
+# Jobs to be run in the workflow
+jobs:
+  # The build job
+  build:
+    # The type of runner to use
+    runs-on: windows-latest
+    # Permissions for the job
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+
+    # Steps in the build job
+    steps:
+      # Checks out a copy of your repository on the runner
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Installs cosign, a tool for signing and verifying container images
+      - name: Install cosign
+        if: github.event_name != 'pull_request'
+        uses: sigstore/cosign-installer@e1523de7571e31dbe865fd2e80c5c7c23ae71eb4
+        with:
+          cosign-release: 'v2.2.3'
+
+      # Logs into the Docker registry
+      - name: Log into registry ${{ env.REGISTRY }}
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@343f7c4344506bcbf9b4de18042ae17996df046d
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Builds and pushes the Docker image
+      - name: Build and push Docker image
+        run: |
+          docker build -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest .
+          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+
+      # Signs the published Docker image using cosign
+      - name: Sign the published Docker image
+        if: ${{ github.event_name != 'pull_request' }}
+        env:
+          TAGS: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          DIGEST: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@sha256:$(docker inspect --format='{{index .RepoDigests 0}}' ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest | cut -d@ -f2)
+        run: echo "${TAGS}" | xargs -I {} cosign sign --yes {}@${DIGEST}

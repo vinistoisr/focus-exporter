@@ -17,7 +17,7 @@ COPY . .
 # Build the Go app
 RUN go build -o focus-exporter .
 
-# Expose port 8080 to the outside world
+# Expose port 9183
 EXPOSE 9183
 
 # Command to run the executable

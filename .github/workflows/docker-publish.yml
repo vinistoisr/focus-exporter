@@ -1,7 +1,7 @@
 # Name of the GitHub Actions workflow
 name: Docker
 
-# Triggers for the workflow
+
 on:
   # Scheduled trigger, runs at 6:27 every day
   schedule:

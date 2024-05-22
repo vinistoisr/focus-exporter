@@ -4,6 +4,8 @@ import (
 	"flag"
 	"fmt"
 	"net/http"
+	"os"
+	"strconv"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -17,7 +19,7 @@ import (
 var (
 	inactivityThresholdSec uint64
 	listenInterface        string
-	listenPort             string
+	listenPort             int
 	privateMode            bool
 	debugMode              bool
 )
@@ -65,13 +67,25 @@ var (
 	)
 )
 
-// read the inactivityThresholdSec flag value or set it to 60 seconds by default
 func init() {
-	flag.Uint64Var(&inactivityThresholdSec, "inactivityThreshold", 60, "The inactivity threshold in seconds")
-	flag.StringVar(&listenInterface, "interface", "", "The interface to listen on (default is all interfaces)")
-	flag.StringVar(&listenPort, "port", "9183", "The port to listen on (default is 9183)")
-	flag.BoolVar(&privateMode, "private", false, "When true, the window title will be replaced with the process name for increased privacy")
-	flag.BoolVar(&debugMode, "debug", false, "When true, output all values to the console")
+	// Load Environment Variables or use defaults
+	inactivityThresholdSec, _ = strconv.ParseUint(os.Getenv("INACTIVITY_THRESHOLD_SEC"), 10, 64)
+	if inactivityThresholdSec == 0 {
+		inactivityThresholdSec = 60 // default threshold of 60 seconds
+	}
+	listenInterface = os.Getenv("LISTEN_INTERFACE")
+	privateMode = os.Getenv("PRIVATE_MODE") == "true"
+	debugMode = os.Getenv("DEBUG_MODE") == "true"
+	listenPort = 9183 // default port
+
+	// Parse command-line flags, will override environment variables if set
+	flag.Uint64Var(&inactivityThresholdSec, "inactivityThreshold", inactivityThresholdSec, "The inactivity threshold in seconds")
+	flag.StringVar(&listenInterface, "interface", listenInterface, "The interface to listen on (default is all interfaces)")
+	flag.IntVar(&listenPort, "port", listenPort, "The port to listen on (default is 9183)")
+	flag.BoolVar(&privateMode, "private", privateMode, "When true, the window title will be replaced with the process name for increased privacy")
+	flag.BoolVar(&debugMode, "debug", debugMode, "When true, output all values to the console")
+
+	flag.Parse()
 }
 
 // setupMetrics initializes the Prometheus metrics and returns the registry
@@ -84,6 +98,7 @@ func setupMetrics() *prometheus.Registry {
 	reg.MustRegister(focusedWindowDuration)
 	reg.MustRegister(meetingDuration)
 	return reg
+
 }
 
 // startHTTPServer starts the HTTP server to expose the Prometheus metrics
@@ -101,12 +116,12 @@ func main() {
 	// Always output the initial flag values
 	fmt.Printf("Inactivity Threshold: %d seconds\n", inactivityThresholdSec)
 	fmt.Printf("Listening Interface: %s\n", listenInterface)
-	fmt.Printf("Listening Port: %s\n", listenPort)
+	fmt.Printf("Listening Port: %d\n", listenPort)
 	fmt.Printf("Private Mode: %v\n", privateMode)
 	fmt.Printf("Debug Mode: %v\n", debugMode)
 
 	inactivityThreshold := inactivityThresholdSec * 1000
-	listenAddress := fmt.Sprintf("%s:%s", listenInterface, listenPort)
+	listenAddress := fmt.Sprintf("%s:%d", listenInterface, listenPort)
 
 	reg := setupMetrics()
 	startHTTPServer(reg, listenAddress)

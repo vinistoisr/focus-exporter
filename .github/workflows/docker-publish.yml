@@ -61,6 +61,9 @@ jobs:
         run: |
           docker build -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest .
           docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+        env:
+          REGISTRY: ghcr.io
+          IMAGE_NAME: vinistoisr/focus-exporter
 
       # Signs the published Docker image using cosign
       - name: Sign the published Docker image

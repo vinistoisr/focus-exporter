@@ -12,7 +12,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
-	"github.com/VinistoisR/focus-exporter/internal/windowinfo"
+	"github.com/vinistoisr/focus-exporter/internal/windowinfo"
 )
 
 // Command-line flags

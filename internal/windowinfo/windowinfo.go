@@ -10,8 +10,8 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/VinistoisR/focus-exporter/internal/inactivity"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/vinistoisr/focus-exporter/internal/inactivity"
 	"golang.org/x/sys/windows"
 )
 

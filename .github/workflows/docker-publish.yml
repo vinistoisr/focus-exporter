@@ -65,10 +65,15 @@ jobs:
           REGISTRY: ghcr.io
           IMAGE_NAME: vinistoisr/focus-exporter
 
-      # Signs the published Docker image using cosign
+      # Sign the published Docker image
       - name: Sign the published Docker image
         if: ${{ github.event_name != 'pull_request' }}
         env:
           TAGS: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
           DIGEST: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@sha256:$(docker inspect --format='{{index .RepoDigests 0}}' ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest | cut -d@ -f2)
-        run: echo "${TAGS}" | xargs -I {} cosign sign --yes {}@${DIGEST}
+        run: |
+          $tags = "${{ env.TAGS }}".split(" ")
+          foreach ($tag in $tags) {
+            cosign sign --yes $tag@${{ env.DIGEST }}
+          }
+        shell: pwsh

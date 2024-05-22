@@ -61,6 +61,7 @@ jobs:
         run: |
           docker build -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest .
           docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          echo "::set-output name=digest::$(docker inspect --format='{{index .RepoDigests 0}}' ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest | cut -d@ -f2)"
         env:
           REGISTRY: ghcr.io
           IMAGE_NAME: vinistoisr/focus-exporter
@@ -70,7 +71,7 @@ jobs:
         if: ${{ github.event_name != 'pull_request' }}
         env:
           TAGS: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-          DIGEST: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@sha256:$(docker inspect --format='{{index .RepoDigests 0}}' ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest | cut -d@ -f2)
+          DIGEST: ${{ steps.build_and_push.outputs.digest }}
         run: |
           $tags = "${{ env.TAGS }}".split(" ")
           foreach ($tag in $tags) {

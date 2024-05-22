@@ -60,8 +60,8 @@ jobs:
       - name: Build and push Docker image
         run: |
           docker build -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest .
-          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-          echo "::set-output name=digest::$(docker inspect --format='{{index .RepoDigests 0}}' ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest | cut -d@ -f2)"
+          DIGEST=$(docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest | sed -n 's/^.*digest: sha256:\([0-9a-f]*\).*$/\1/p')
+          echo "::set-output name=digest::$DIGEST"
         env:
           REGISTRY: ghcr.io
           IMAGE_NAME: vinistoisr/focus-exporter

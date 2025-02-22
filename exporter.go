@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"strconv"
@@ -114,11 +115,11 @@ func main() {
 	flag.Parse()
 
 	// Always output the initial flag values
-	fmt.Printf("Inactivity Threshold: %d seconds\n", inactivityThresholdSec)
-	fmt.Printf("Listening Interface: %s\n", listenInterface)
-	fmt.Printf("Listening Port: %d\n", listenPort)
-	fmt.Printf("Private Mode: %v\n", privateMode)
-	fmt.Printf("Debug Mode: %v\n", debugMode)
+	log.Printf("Inactivity Threshold: %d seconds\n", inactivityThresholdSec)
+	log.Printf("Listening Interface: %s\n", listenInterface)
+	log.Printf("Listening Port: %d\n", listenPort)
+	log.Printf("Private Mode: %v\n", privateMode)
+	log.Printf("Debug Mode: %v\n", debugMode)
 
 	inactivityThreshold := inactivityThresholdSec * 1000
 	listenAddress := fmt.Sprintf("%s:%d", listenInterface, listenPort)

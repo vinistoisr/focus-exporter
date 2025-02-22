@@ -2,6 +2,7 @@ package windowinfo
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"regexp"
 	"strings"
@@ -135,17 +136,17 @@ func ProcessWindowInfo(inactivityThreshold uint64, privateMode bool, debugMode b
 	windowInfo, err := GetActiveWindowInfo(*focusChangeCounter)
 	if err != nil {
 		if debugMode {
-			fmt.Println("Error getting window information:", err)
+			log.Println("Error getting window information:", err)
 		}
 		return
 	}
 
 	if debugMode {
-		fmt.Println("Window Title:", windowInfo.Title)
-		fmt.Println("Process ID:", windowInfo.ProcessID)
-		fmt.Println("Process Name:", windowInfo.ProcessName)
-		fmt.Println("Hostname:", windowInfo.Hostname)
-		fmt.Println("Username:", windowInfo.Username)
+		log.Println("Window Title:", windowInfo.Title)
+		log.Println("Process ID:", windowInfo.ProcessID)
+		log.Println("Process Name:", windowInfo.ProcessName)
+		log.Println("Hostname:", windowInfo.Hostname)
+		log.Println("Username:", windowInfo.Username)
 	}
 
 	mutex.Lock()
@@ -174,7 +175,7 @@ func ProcessWindowInfo(inactivityThreshold uint64, privateMode bool, debugMode b
 
 	inactivityTime, shouldIncrementCounter := inactivity.GetInactivityTime(inactivityThreshold)
 	if debugMode {
-		fmt.Println("Inactivity:", inactivityTime)
+		log.Println("Inactivity:", inactivityTime)
 	}
 
 	if shouldIncrementCounter {

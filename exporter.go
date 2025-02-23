@@ -23,6 +23,7 @@ var (
 	listenPort             int
 	privateMode            bool
 	debugMode              bool
+	debugFile              string
 )
 
 // Prometheus metrics
@@ -78,6 +79,7 @@ func init() {
 	privateMode = os.Getenv("PRIVATE_MODE") == "true"
 	debugMode = os.Getenv("DEBUG_MODE") == "true"
 	listenPort = 9183 // default port
+	debugFile = ""
 
 	// Parse command-line flags, will override environment variables if set
 	flag.Uint64Var(&inactivityThresholdSec, "inactivityThreshold", inactivityThresholdSec, "The inactivity threshold in seconds")
@@ -85,6 +87,7 @@ func init() {
 	flag.IntVar(&listenPort, "port", listenPort, "The port to listen on (default is 9183)")
 	flag.BoolVar(&privateMode, "private", privateMode, "When true, the window title will be replaced with the process name for increased privacy")
 	flag.BoolVar(&debugMode, "debug", debugMode, "When true, output all values to the console")
+	flag.StringVar(&debugFile, "debugFile", debugFile, "If set, logs into a file instead of std:out")
 
 	flag.Parse()
 }
@@ -114,12 +117,25 @@ func startHTTPServer(reg *prometheus.Registry, listenAddress string) {
 func main() {
 	flag.Parse()
 
+	if len(debugFile) > 0 {
+		f, err := os.Create(debugFile)
+
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		log.SetOutput(f)
+
+		defer f.Close()
+	}
+
 	// Always output the initial flag values
 	log.Printf("Inactivity Threshold: %d seconds\n", inactivityThresholdSec)
 	log.Printf("Listening Interface: %s\n", listenInterface)
 	log.Printf("Listening Port: %d\n", listenPort)
 	log.Printf("Private Mode: %v\n", privateMode)
 	log.Printf("Debug Mode: %v\n", debugMode)
+	log.Printf("Debug File: %v\n", debugFile)
 
 	inactivityThreshold := inactivityThresholdSec * 1000
 	listenAddress := fmt.Sprintf("%s:%d", listenInterface, listenPort)

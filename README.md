@@ -2,7 +2,7 @@
 
 ## TL;DR
 
-**Timewarp helps you fill out your timesheets without keeping track of what you worked on.**
+**Timewarp helps you fill out your timesheets without having to keep track yourself.**
 
 It runs quietly on your Windows PC and watches which window is in front — that's it. It notes the app name and window title (like `25-125_SLD-E101.dwg - AutoCAD`) and saves it to a local database on your own computer. Nothing is sent anywhere. No server, no cloud, no tracking dashboard. **Your manager cannot see this data. Nobody can, except you.**
 

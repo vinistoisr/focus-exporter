@@ -178,17 +178,27 @@ func ConnectClaude(exePath, dbpath string) string {
 		}
 	}
 
-	// Check if already connected
-	if _, exists := servers["timewarp"]; exists {
-		return "Timewarp is already connected to Claude Desktop."
-	}
-
 	// Build the timewarp entry
 	entry := map[string]interface{}{
 		"command": exePath,
 		"args":    []string{"-mcp", "-dbpath", dbpath},
 	}
 	entryJSON, _ := json.Marshal(entry)
+
+	// Check if already connected with matching config
+	if existing, exists := servers["timewarp"]; exists {
+		var old map[string]interface{}
+		if json.Unmarshal(existing, &old) == nil {
+			oldCmd, _ := old["command"].(string)
+			oldArgs, _ := json.Marshal(old["args"])
+			newArgs, _ := json.Marshal(entry["args"])
+			if oldCmd == exePath && string(oldArgs) == string(newArgs) {
+				return "Timewarp is already connected to Claude Desktop."
+			}
+		}
+	}
+
+	_, wasExisting := servers["timewarp"]
 	servers["timewarp"] = json.RawMessage(entryJSON)
 
 	serversJSON, _ := json.Marshal(servers)
@@ -203,5 +213,8 @@ func ConnectClaude(exePath, dbpath string) string {
 		return fmt.Sprintf("Could not write config file: %v", err)
 	}
 
+	if wasExisting {
+		return "Updated! Restart Claude Desktop to apply the new Timewarp config."
+	}
 	return "Connected! Restart Claude Desktop to activate the Timewarp MCP server."
 }

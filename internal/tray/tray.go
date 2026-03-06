@@ -21,7 +21,9 @@ type Callbacks struct {
 	OnPrometheusToggle     func(enable bool)
 	OnSetDBPath            func(path string)
 	// GetMCPConfig returns the MCP JSON config string.
-	GetMCPConfig           func() string
+	GetMCPConfig func() string
+	// GetMCPPaths returns the exe path and db path for MCP config.
+	GetMCPPaths func() (exePath, dbPath string)
 }
 
 // Run starts the system tray icon. It blocks until quit.
@@ -70,7 +72,12 @@ func Run(dbpath string, cb Callbacks) {
 		mOpenDB := systray.AddMenuItem("Open DB Folder", "Open the database folder in Explorer")
 		mSetDB := systray.AddMenuItem("Set DB Folder...", "Choose a folder for database files")
 		systray.AddSeparator()
-		mCopyMCP := systray.AddMenuItem("Copy MCP Config", "Copy MCP server config JSON to clipboard")
+		mConnectClaude := systray.AddMenuItem("Connect to Claude Desktop", "Add Timewarp to Claude Desktop's MCP config")
+		if IsClaudeConnected() {
+			mConnectClaude.SetTitle("Connected to Claude Desktop")
+			mConnectClaude.Check()
+		}
+		mCopyMCP := systray.AddMenuItem("Copy MCP Config", "Copy MCP server config JSON to clipboard (for other LLM apps)")
 		systray.AddSeparator()
 		mQuit := systray.AddMenuItem("Quit", "Stop Timewarp")
 
@@ -126,7 +133,17 @@ func Run(dbpath string, cb Callbacks) {
 						}
 					}
 
-				case <-mCopyMCP.ClickedCh:
+				case <-mConnectClaude.ClickedCh:
+				if cb.GetMCPPaths != nil {
+					exePath, dbPath := cb.GetMCPPaths()
+					msg := ConnectClaude(exePath, dbPath)
+					messageBox("Timewarp", msg, mbOK|mbIconInfo)
+					if IsClaudeConnected() {
+						mConnectClaude.SetTitle("Connected to Claude Desktop")
+						mConnectClaude.Check()
+					}
+				}
+			case <-mCopyMCP.ClickedCh:
 					if cb.GetMCPConfig != nil {
 						cfg := cb.GetMCPConfig()
 						if copyToClipboard(cfg) {

@@ -6,13 +6,15 @@
 
 It runs quietly on your Windows PC and watches which window is in front — that's it. It notes the app name and window title (like `25-125_SLD-E101.dwg - AutoCAD`) and saves it to a local database on your own computer. Nothing is sent anywhere. No server, no cloud, no tracking dashboard. **Your manager cannot see this data. Nobody can, except you.**
 
-When it's time to fill out your timecard, you open Claude and ask in plain English:
+When it's time to fill out your timecard, you open your AI assistant and ask in plain English:
 
 > *"What did I work on this week?"*
 
-Claude reads your local data and tells you: "You spent 4 hours in AutoCAD on project 25-125, 1 hour in a design review meeting, 30 minutes on emails..." — and you copy that into your timesheet. Done.
+It reads your local data and tells you: "You spent 4 hours in AutoCAD on project 25-125, 1 hour in a design review meeting, 30 minutes on emails..." — and you copy that into your timesheet. Done.
 
-**How it works under the hood:** Every second, Timewarp checks which window is active using the Windows API. It groups those seconds into sessions (ignoring brief alt-tabs), extracts project numbers from file names when possible, and stores everything in a local SQLite database. Claude accesses this database through a local MCP connection — the same way it accesses files on your computer — and can answer questions about your work history.
+**How it works under the hood:** Every second, Timewarp checks which window is active using the Windows API. It groups those seconds into sessions (ignoring brief alt-tabs), extracts project numbers from file names when possible, and stores everything in a local SQLite database. Your AI assistant accesses this database through a local [MCP](https://modelcontextprotocol.io/) connection — the same way it accesses files on your computer — and can answer questions about your work history.
+
+**Compatible with any MCP-enabled AI app**, including Claude Desktop, ChatGPT Desktop, and others that support the Model Context Protocol.
 
 ---
 
@@ -23,11 +25,11 @@ graph LR
     subgraph Your PC
         TW["🕐 Timewarp<br/><i>system tray app</i>"]
         DB[("💾 SQLite DB<br/><code>timewarp-*.db</code>")]
-        CD["🤖 Claude Desktop"]
+        AI["🤖 AI Desktop App<br/><i>Claude, ChatGPT, etc.</i>"]
 
         TW -- "polls active window<br/>every 1 second" --> WIN["🪟 Windows API"]
         TW -- "writes sessions" --> DB
-        CD -- "asks: what did I work on?" --> MCP["📡 MCP Server<br/><i>local stdio</i>"]
+        AI -- "asks: what did I work on?" --> MCP["📡 MCP Server<br/><i>local stdio</i>"]
         MCP -- "reads" --> DB
     end
 
@@ -37,12 +39,12 @@ graph LR
     style TW fill:#5a3cdc,color:#fff,stroke:#5a3cdc
     style DB fill:#1a1832,color:#fff,stroke:#5a3cdc
     style MCP fill:#1a1832,color:#fff,stroke:#5a3cdc
-    style CD fill:#d4a574,color:#1a1832,stroke:#d4a574
+    style AI fill:#d4a574,color:#1a1832,stroke:#d4a574
     style WIN fill:#333,color:#fff,stroke:#555
     style OD fill:#0078d4,color:#fff,stroke:#0078d4
 ```
 
-> **Everything stays on your machine.** The MCP server is a local process that communicates with Claude Desktop over stdin/stdout — it does not open any network ports or send data anywhere.
+> **Everything stays on your machine.** The MCP server is a local process that communicates with your AI app over stdin/stdout — it does not open any network ports or send data anywhere.
 
 ---
 
@@ -61,30 +63,24 @@ On the first launch, Timewarp walks you through setup automatically:
 
 After setup, a small purple clock icon appears in your system tray — Timewarp is now tracking.
 
-### Step 3: Connect to Claude Desktop
+### Step 3: Connect to your AI app
 
-This is what lets you ask Claude about your work. Right-click the tray icon and click **Copy MCP Config** — this copies the correct JSON to your clipboard.
+Right-click the tray icon and click **Connect to Claude Desktop**. Timewarp automatically finds your Claude Desktop config file and adds itself. Restart Claude Desktop and you're done.
 
-Then open your Claude Desktop config file:
+> **Using ChatGPT Desktop or another MCP-compatible app?** Click **Copy MCP Config** instead — this copies the JSON to your clipboard so you can paste it into your app's config file manually. The MCP server config looks like this:
+>
+> ```json
+> {
+>   "mcpServers": {
+>     "timewarp": {
+>       "command": "C:\\Tools\\Timewarp\\timewarp.exe",
+>       "args": ["-mcp", "-dbpath", "C:\\Users\\You\\OneDrive\\TimewarpData"]
+>     }
+>   }
+> }
+> ```
 
-```
-%APPDATA%\Claude\claude_desktop_config.json
-```
-
-Paste the config inside the `"mcpServers"` section. The result should look something like this:
-
-```json
-{
-  "mcpServers": {
-    "timewarp": {
-      "command": "C:\\Tools\\Timewarp\\timewarp.exe",
-      "args": ["-mcp", "-dbpath", "C:\\Users\\You\\OneDrive\\TimewarpData"]
-    }
-  }
-}
-```
-
-Restart Claude Desktop. You should see "timewarp" listed as a connected MCP server. Now you can ask things like:
+Once connected, you can ask things like:
 
 - *"What did I work on this week?"*
 - *"How much time did I spend in AutoCAD?"*
@@ -93,9 +89,9 @@ Restart Claude Desktop. You should see "timewarp" listed as a connected MCP serv
 
 ---
 
-## What to Ask Claude
+## What to Ask
 
-Once Timewarp is running and connected to Claude Desktop, just ask in plain English. Here are some examples:
+Once Timewarp is running and connected, just ask in plain English. Here are some examples:
 
 | What you want | What to type |
 |---------------|-------------|
@@ -109,7 +105,7 @@ Once Timewarp is running and connected to Claude Desktop, just ask in plain Engl
 | Compare weeks | *"Compare my project time this week vs last week"* |
 | Catch untracked time | *"I was on site Monday with no laptop — can you show me Tuesday through Friday only?"* |
 
-Claude will call the appropriate Timewarp tools automatically. You don't need to know the tool names or syntax — just describe what you need.
+Your AI app will call the appropriate Timewarp tools automatically. You don't need to know the tool names or syntax — just describe what you need.
 
 ---
 
@@ -124,14 +120,15 @@ Right-click the tray icon to access these options:
 | **Enable Prometheus Endpoint** | Toggle the Prometheus metrics HTTP server on/off (off by default). |
 | **Open DB Folder** | Opens your database folder in Explorer. |
 | **Set DB Folder...** | Pick a new folder for the database. Takes effect immediately. |
-| **Copy MCP Config** | Copies the Claude Desktop MCP config JSON to your clipboard. |
+| **Connect to Claude Desktop** | Automatically adds Timewarp to Claude Desktop's config. Shows a checkmark when connected. |
+| **Copy MCP Config** | Copies MCP server config JSON to your clipboard (for ChatGPT Desktop or other MCP apps). |
 | **Quit** | Stops Timewarp. |
 
 ---
 
 ## MCP Tools
 
-These are the tools Claude can call to query your data:
+These are the tools your AI app can call to query your data:
 
 | Tool | Description |
 |------|-------------|
@@ -142,9 +139,9 @@ These are the tools Claude can call to query your data:
 
 ### Example: Weekly Summary
 
-Ask Claude: *"Summarize my work this week for my timecard"*
+Ask: *"Summarize my work this week for my timecard"*
 
-Claude calls `get_weekly_summary` and receives:
+Your AI app calls `get_weekly_summary` and receives:
 
 ```json
 {
@@ -187,7 +184,7 @@ Timewarp doesn't just record every second individually. It stitches activity int
 | Flag | Description | Default |
 |------|-------------|---------|
 | `-dbpath` | Directory for database files | Same directory as executable |
-| `-mcp` | Run as MCP stdio server (used by Claude Desktop) | `false` |
+| `-mcp` | Run as MCP stdio server (used by AI desktop apps) | `false` |
 | `-install` | Create a Windows startup scheduled task | |
 | `-uninstall` | Remove the startup scheduled task | |
 | `-silent` | Run without system tray icon | `false` |

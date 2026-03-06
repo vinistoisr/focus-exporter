@@ -414,6 +414,17 @@ func main() {
 				stopPrometheus()
 			}
 		},
+		GetMCPPaths: func() (string, string) {
+			exePath, err := os.Executable()
+			if err != nil {
+				return "", ""
+			}
+			p := dbpath
+			if p == "" {
+				p = db.ExeDir()
+			}
+			return exePath, p
+		},
 		GetMCPConfig: func() string {
 			exePath, err := os.Executable()
 			if err != nil {

@@ -1,6 +1,9 @@
 package tray
 
 import (
+	"encoding/json"
+	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -79,4 +82,93 @@ func OfferScheduledTask() bool {
 			"  timewarp.exe -uninstall",
 		mbYesNo|mbIconQuestion)
 	return ret == idYes
+}
+
+// claudeConfigPath returns the path to Claude Desktop's config file, or empty if not found.
+func claudeConfigPath() string {
+	appdata := os.Getenv("APPDATA")
+	if appdata == "" {
+		return ""
+	}
+	p := filepath.Join(appdata, "Claude", "claude_desktop_config.json")
+	if _, err := os.Stat(p); err != nil {
+		return ""
+	}
+	return p
+}
+
+// IsClaudeConnected checks if the Claude Desktop config already has a timewarp MCP entry.
+func IsClaudeConnected() bool {
+	p := claudeConfigPath()
+	if p == "" {
+		return false
+	}
+	data, err := os.ReadFile(p)
+	if err != nil {
+		return false
+	}
+	var config map[string]interface{}
+	if err := json.Unmarshal(data, &config); err != nil {
+		return false
+	}
+	servers, ok := config["mcpServers"].(map[string]interface{})
+	if !ok {
+		return false
+	}
+	_, exists := servers["timewarp"]
+	return exists
+}
+
+// ConnectClaude adds the timewarp MCP server entry to Claude Desktop's config.
+// Returns a user-facing message describing the result.
+func ConnectClaude(exePath, dbpath string) string {
+	p := claudeConfigPath()
+	if p == "" {
+		return "Could not find Claude Desktop config.\n\nExpected location:\n%APPDATA%\\Claude\\claude_desktop_config.json\n\nMake sure Claude Desktop is installed."
+	}
+
+	data, err := os.ReadFile(p)
+	if err != nil {
+		return fmt.Sprintf("Could not read config file: %v", err)
+	}
+
+	var config map[string]json.RawMessage
+	if err := json.Unmarshal(data, &config); err != nil {
+		return fmt.Sprintf("Could not parse config file: %v\n\nYou may need to fix the JSON manually.", err)
+	}
+
+	// Parse or create mcpServers
+	servers := map[string]json.RawMessage{}
+	if raw, ok := config["mcpServers"]; ok {
+		if err := json.Unmarshal(raw, &servers); err != nil {
+			return fmt.Sprintf("Could not parse mcpServers: %v\n\nYou may need to fix the JSON manually.", err)
+		}
+	}
+
+	// Check if already connected
+	if _, exists := servers["timewarp"]; exists {
+		return "Timewarp is already connected to Claude Desktop."
+	}
+
+	// Build the timewarp entry
+	entry := map[string]interface{}{
+		"command": exePath,
+		"args":    []string{"-mcp", "-dbpath", dbpath},
+	}
+	entryJSON, _ := json.Marshal(entry)
+	servers["timewarp"] = json.RawMessage(entryJSON)
+
+	serversJSON, _ := json.Marshal(servers)
+	config["mcpServers"] = json.RawMessage(serversJSON)
+
+	out, err := json.MarshalIndent(config, "", "  ")
+	if err != nil {
+		return fmt.Sprintf("Could not serialize config: %v", err)
+	}
+
+	if err := os.WriteFile(p, out, 0644); err != nil {
+		return fmt.Sprintf("Could not write config file: %v", err)
+	}
+
+	return "Connected! Restart Claude Desktop to activate the Timewarp MCP server."
 }

@@ -26,7 +26,7 @@ var suppressedProcesses = map[string]bool{
 	"logonui.exe":              true,
 }
 
-var projectNumberRe = regexp.MustCompile(`\b(\d{2}-\d{3})\b`)
+var projectNumberRe = regexp.MustCompile(`(?:^|\D)(\d{2}-\d{3})(?:\D|$)`)
 
 // Tracker holds the database connection and in-memory pending session state.
 type Tracker struct {
@@ -200,8 +200,8 @@ func (t *Tracker) flushPending(now time.Time) {
 	}
 
 	var projNum *string
-	if m := projectNumberRe.FindString(t.pending.windowTitle); m != "" {
-		projNum = &m
+	if matches := projectNumberRe.FindStringSubmatch(t.pending.windowTitle); len(matches) > 1 {
+		projNum = &matches[1]
 	}
 
 	// Check if this is a meeting

@@ -365,11 +365,12 @@ func main() {
 
 	// Onboarding: offer to create scheduled task
 	if !silentMode && !tray.HasScheduledTask() {
-		if tray.OfferScheduledTask() {
-			if err := doInstall(); err != nil {
-				log.Printf("Failed to create scheduled task: %v", err)
-			}
+		exePath, _ := os.Executable()
+		p := dbpath
+		if p == "" {
+			p = db.ExeDir()
 		}
+		tray.OfferScheduledTask(exePath, p)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())

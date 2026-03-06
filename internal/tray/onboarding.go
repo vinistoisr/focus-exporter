@@ -40,9 +40,16 @@ func HasExistingDB(dir string) bool {
 	return len(matches) > 0
 }
 
+// hiddenCmd returns a Cmd with the console window hidden.
+func hiddenCmd(name string, args ...string) *exec.Cmd {
+	cmd := exec.Command(name, args...)
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	return cmd
+}
+
 // HasScheduledTask checks if the "Timewarp" scheduled task exists.
 func HasScheduledTask() bool {
-	cmd := exec.Command("schtasks", "/query", "/tn", "Timewarp")
+	cmd := hiddenCmd("schtasks", "/query", "/tn", "Timewarp")
 	err := cmd.Run()
 	return err == nil
 }
@@ -59,7 +66,7 @@ func RunOnboarding() string {
 			"Click OK to choose a folder.",
 		mbOK|mbIconInfo)
 
-	cmd := exec.Command("powershell", "-NoProfile", "-Command",
+	cmd := hiddenCmd("powershell", "-NoProfile", "-Command",
 		`Add-Type -AssemblyName System.Windows.Forms; `+
 			`$d = New-Object System.Windows.Forms.FolderBrowserDialog; `+
 			`$d.Description = 'Select or create a folder for Timewarp data'; `+
@@ -72,16 +79,42 @@ func RunOnboarding() string {
 	return strings.TrimSpace(string(out))
 }
 
-// OfferScheduledTask asks the user if they want Timewarp to start automatically,
-// and returns true if they said yes.
-func OfferScheduledTask() bool {
+// OfferScheduledTask asks the user if they want Timewarp to start automatically.
+// If yes, it creates the scheduled task via an elevated process and returns true.
+func OfferScheduledTask(exePath, dbpath string) bool {
 	ret := messageBox("Start Automatically?",
 		"Would you like Timewarp to start automatically when you log in?\r\n\r\n"+
 			"This will ask for administrator permission to create a scheduled task.\r\n\r\n"+
 			"You can remove this later from the command line with:\r\n"+
 			"  timewarp.exe -uninstall",
 		mbYesNo|mbIconQuestion)
-	return ret == idYes
+	if ret != idYes {
+		return false
+	}
+
+	// Launch an elevated process with just -install (not the whole app)
+	args := fmt.Sprintf(`-install -dbpath "%s"`, dbpath)
+	if err := elevatedRun(exePath, args); err != nil {
+		messageBox("Timewarp", fmt.Sprintf("Failed to create scheduled task:\n%v", err), mbOK|mbIconInfo)
+		return false
+	}
+	return true
+}
+
+// elevatedRun launches the given exe with args via UAC "runas".
+func elevatedRun(exe, args string) error {
+	verbPtr, _ := syscall.UTF16PtrFromString("runas")
+	exePtr, _ := syscall.UTF16PtrFromString(exe)
+	argsPtr, _ := syscall.UTF16PtrFromString(args)
+
+	shell32 := syscall.NewLazyDLL("shell32.dll")
+	procShellExecuteW := shell32.NewProc("ShellExecuteW")
+
+	ret, _, _ := procShellExecuteW.Call(0, uintptr(unsafe.Pointer(verbPtr)), uintptr(unsafe.Pointer(exePtr)), uintptr(unsafe.Pointer(argsPtr)), 0, syscall.SW_HIDE)
+	if ret <= 32 {
+		return fmt.Errorf("ShellExecute returned %d", ret)
+	}
+	return nil
 }
 
 // claudeConfigPath returns the path to Claude Desktop's config file, or empty if not found.

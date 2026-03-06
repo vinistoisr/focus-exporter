@@ -20,29 +20,7 @@ It reads your local data and tells you: "You spent 4 hours in AutoCAD on project
 
 ## Architecture
 
-```mermaid
-graph LR
-    subgraph Your PC
-        TW["🕐 Timewarp<br/><i>system tray app</i>"]
-        DB[("💾 SQLite DB<br/><code>timewarp-*.db</code>")]
-        AI["🤖 AI Desktop App<br/><i>Claude, ChatGPT, etc.</i>"]
-
-        TW -- "polls active window<br/>every 1 second" --> WIN["🪟 Windows API"]
-        TW -- "writes sessions" --> DB
-        AI -- "asks: what did I work on?" --> MCP["📡 MCP Server<br/><i>local stdio</i>"]
-        MCP -- "reads" --> DB
-    end
-
-    OD["☁️ OneDrive<br/><i>(optional sync)</i>"]
-    DB -. "sync DB folder<br/>across machines" .-> OD
-
-    style TW fill:#5a3cdc,color:#fff,stroke:#5a3cdc
-    style DB fill:#1a1832,color:#fff,stroke:#5a3cdc
-    style MCP fill:#1a1832,color:#fff,stroke:#5a3cdc
-    style AI fill:#d4a574,color:#1a1832,stroke:#d4a574
-    style WIN fill:#333,color:#fff,stroke:#555
-    style OD fill:#0078d4,color:#fff,stroke:#0078d4
-```
+![Timewarp Architecture](diagram.jpg)
 
 > **Everything stays on your machine.** The MCP server is a local process that communicates with your AI app over stdin/stdout — it does not open any network ports or send data anywhere.
 

@@ -196,7 +196,7 @@ func copyToClipboard(text string) bool {
 	if runtime.GOOS != "windows" {
 		return false
 	}
-	cmd := exec.Command("clip.exe")
+	cmd := hiddenCmd("clip.exe")
 	cmd.Stdin = strings.NewReader(text)
 	return cmd.Run() == nil
 }
@@ -205,7 +205,7 @@ func pickFolder() string {
 	if runtime.GOOS != "windows" {
 		return ""
 	}
-	cmd := exec.Command("powershell", "-NoProfile", "-Command",
+	cmd := hiddenCmd("powershell", "-NoProfile", "-Command",
 		`Add-Type -AssemblyName System.Windows.Forms; `+
 			`$d = New-Object System.Windows.Forms.FolderBrowserDialog; `+
 			`$d.Description = 'Select Timewarp DB folder'; `+

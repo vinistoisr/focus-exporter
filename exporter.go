@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -82,6 +83,8 @@ var (
 var (
 	trackerMu sync.Mutex
 	tracker   *db.Tracker
+	paused    atomic.Bool
+	inactThresholdMs atomic.Uint64
 )
 
 func getTracker() *db.Tracker {
@@ -155,13 +158,15 @@ func runExporter(ctx context.Context) {
 		log.Printf("DB path: %s", path)
 	}
 
+	// Store initial threshold in atomic for tray menu to update
+	inactThresholdMs.Store(inactivityThresholdSec * 1000)
+
 	log.Printf("Inactivity Threshold: %d seconds", inactivityThresholdSec)
 	log.Printf("Listening Interface: %s", listenInterface)
 	log.Printf("Listening Port: %d", listenPort)
 	log.Printf("Private Mode: %v", privateMode)
 	log.Printf("Debug Mode: %v", debugMode)
 
-	inactivityThreshold := inactivityThresholdSec * 1000
 	listenAddress := fmt.Sprintf("%s:%d", listenInterface, listenPort)
 
 	reg := setupMetrics()
@@ -178,13 +183,16 @@ func runExporter(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
+			if paused.Load() {
+				continue
+			}
 			// Avoid nil-interface trap: only pass tracker as interface when non-nil
 			cur := getTracker()
 			var ti windowinfo.FocusTracker
 			if cur != nil {
 				ti = cur
 			}
-			windowinfo.ProcessWindowInfo(inactivityThreshold, privateMode, debugMode, focusChangeCounter, focusedWindowDuration, meetingDuration, inactivityMetric, windowPidGauge, ti)
+			windowinfo.ProcessWindowInfo(inactThresholdMs.Load(), privateMode, debugMode, focusChangeCounter, focusedWindowDuration, meetingDuration, inactivityMetric, windowPidGauge, ti)
 		}
 	}
 }
@@ -272,14 +280,26 @@ func main() {
 	if path == "" {
 		path = db.ExeDir()
 	}
-	tray.Run(path, func() {
-		go runExporter(ctx)
-	}, func() {
-		cancel()
-		// Wait briefly for exporter goroutine to stop
-		time.Sleep(100 * time.Millisecond)
-		if t := getTracker(); t != nil {
-			t.Close()
-		}
+	tray.Run(path, tray.Callbacks{
+		OnReady: func() {
+			go runExporter(ctx)
+		},
+		OnQuit: func() {
+			cancel()
+			time.Sleep(100 * time.Millisecond)
+			if t := getTracker(); t != nil {
+				t.Close()
+			}
+		},
+		OnPause: func() {
+			paused.Store(true)
+		},
+		OnResume: func() {
+			paused.Store(false)
+		},
+		SetInactivityThreshold: func(seconds uint64) {
+			inactThresholdMs.Store(seconds * 1000)
+			log.Printf("Inactivity threshold changed to %d seconds", seconds)
+		},
 	})
 }

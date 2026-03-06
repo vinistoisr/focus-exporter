@@ -9,8 +9,27 @@ import (
 	"math"
 )
 
-// generateIcon creates a 32x32 ICO with a simple clock/timer design.
-func generateIcon() []byte {
+// IconActive returns the tray icon for active tracking (purple).
+func IconActive() []byte {
+	return buildIcon(
+		color.RGBA{R: 90, G: 60, B: 220, A: 255},  // ring
+		color.RGBA{R: 30, G: 25, B: 50, A: 255},    // fill
+		color.RGBA{R: 180, G: 160, B: 255, A: 255},  // hands
+		color.RGBA{R: 220, G: 200, B: 255, A: 255},  // center
+	)
+}
+
+// IconPaused returns the tray icon for paused tracking (grey).
+func IconPaused() []byte {
+	return buildIcon(
+		color.RGBA{R: 120, G: 120, B: 120, A: 255}, // ring
+		color.RGBA{R: 50, G: 50, B: 50, A: 255},    // fill
+		color.RGBA{R: 170, G: 170, B: 170, A: 255},  // hands
+		color.RGBA{R: 200, G: 200, B: 200, A: 255},  // center
+	)
+}
+
+func buildIcon(ring, fill, hand, center color.RGBA) []byte {
 	const size = 32
 	img := image.NewRGBA(image.Rect(0, 0, size, size))
 
@@ -25,11 +44,9 @@ func generateIcon() []byte {
 			dist := math.Sqrt(dx*dx + dy*dy)
 
 			if dist <= outerR && dist >= innerR {
-				// Ring: blue-purple
-				img.SetRGBA(x, y, color.RGBA{R: 90, G: 60, B: 220, A: 255})
+				img.SetRGBA(x, y, ring)
 			} else if dist < innerR {
-				// Fill: dark
-				img.SetRGBA(x, y, color.RGBA{R: 30, G: 25, B: 50, A: 255})
+				img.SetRGBA(x, y, fill)
 			}
 		}
 	}
@@ -41,9 +58,9 @@ func generateIcon() []byte {
 		hy := cy - t*6
 		ix, iy := int(hx), int(hy)
 		if ix >= 0 && ix < size && iy >= 0 && iy < size {
-			img.SetRGBA(ix, iy, color.RGBA{R: 180, G: 160, B: 255, A: 255})
+			img.SetRGBA(ix, iy, hand)
 			if ix+1 < size {
-				img.SetRGBA(ix+1, iy, color.RGBA{R: 180, G: 160, B: 255, A: 255})
+				img.SetRGBA(ix+1, iy, hand)
 			}
 		}
 	}
@@ -54,16 +71,16 @@ func generateIcon() []byte {
 		hy := cy - t*4
 		ix, iy := int(hx), int(hy)
 		if ix >= 0 && ix < size && iy >= 0 && iy < size {
-			img.SetRGBA(ix, iy, color.RGBA{R: 180, G: 160, B: 255, A: 255})
+			img.SetRGBA(ix, iy, hand)
 			if iy+1 < size {
-				img.SetRGBA(ix, iy+1, color.RGBA{R: 180, G: 160, B: 255, A: 255})
+				img.SetRGBA(ix, iy+1, hand)
 			}
 		}
 	}
 	// Center dot
 	for dy := -1; dy <= 1; dy++ {
 		for dx := -1; dx <= 1; dx++ {
-			img.SetRGBA(int(cx)+dx, int(cy)+dy, color.RGBA{R: 220, G: 200, B: 255, A: 255})
+			img.SetRGBA(int(cx)+dx, int(cy)+dy, center)
 		}
 	}
 
@@ -74,18 +91,17 @@ func generateIcon() []byte {
 
 	// Wrap in ICO container (PNG-compressed, supported on Vista+)
 	var ico bytes.Buffer
-	binary.Write(&ico, binary.LittleEndian, uint16(0)) // reserved
-	binary.Write(&ico, binary.LittleEndian, uint16(1)) // type = icon
-	binary.Write(&ico, binary.LittleEndian, uint16(1)) // count = 1
-	// ICONDIRENTRY
-	ico.WriteByte(uint8(size))                                     // width
-	ico.WriteByte(uint8(size))                                     // height
-	ico.WriteByte(0)                                               // color count
-	ico.WriteByte(0)                                               // reserved
-	binary.Write(&ico, binary.LittleEndian, uint16(1))             // planes
-	binary.Write(&ico, binary.LittleEndian, uint16(32))            // bpp
-	binary.Write(&ico, binary.LittleEndian, uint32(len(pngBytes))) // data size
-	binary.Write(&ico, binary.LittleEndian, uint32(22))            // data offset (6 + 16)
+	binary.Write(&ico, binary.LittleEndian, uint16(0))
+	binary.Write(&ico, binary.LittleEndian, uint16(1))
+	binary.Write(&ico, binary.LittleEndian, uint16(1))
+	ico.WriteByte(uint8(size))
+	ico.WriteByte(uint8(size))
+	ico.WriteByte(0)
+	ico.WriteByte(0)
+	binary.Write(&ico, binary.LittleEndian, uint16(1))
+	binary.Write(&ico, binary.LittleEndian, uint16(32))
+	binary.Write(&ico, binary.LittleEndian, uint32(len(pngBytes)))
+	binary.Write(&ico, binary.LittleEndian, uint32(22))
 	ico.Write(pngBytes)
 
 	return ico.Bytes()

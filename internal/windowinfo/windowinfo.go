@@ -11,13 +11,17 @@ import (
 	"unsafe"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/vinistoisr/focus-exporter/internal/inactivity"
+	"github.com/vinistoisr/timewarp/internal/inactivity"
 	"golang.org/x/sys/windows"
 )
 
 var (
 	user32                  = syscall.NewLazyDLL("user32.dll")
 	kernel32                = syscall.NewLazyDLL("kernel32.dll")
+	psapi                   = syscall.NewLazyDLL("psapi.dll")
+	procGetForegroundWindow = user32.NewProc("GetForegroundWindow")
+	procGetWindowTextW      = user32.NewProc("GetWindowTextW")
+	procGetModuleBaseNameW  = psapi.NewProc("GetModuleBaseNameW")
 	openProcess             = kernel32.NewProc("OpenProcess")
 	closeHandle             = kernel32.NewProc("CloseHandle")
 	currentForegroundWindow windows.HWND
@@ -25,6 +29,13 @@ var (
 	LastWindowFocusTime     time.Time
 	mutex                   sync.Mutex
 )
+
+// FocusTracker is the interface for recording focus and inactivity events to the DB.
+type FocusTracker interface {
+	RecordFocus(hostname, username, processName, windowTitle string, now time.Time)
+	RecordInactivityStart(now time.Time)
+	RecordInactivityEnd(hostname, username string, now time.Time)
+}
 
 // ActiveWindowInfo struct to hold information about the active window
 type ActiveWindowInfo struct {
@@ -74,17 +85,14 @@ func GetActiveWindowInfo(focusChangeCounter prometheus.CounterVec) (ActiveWindow
 }
 
 func getForegroundWindow() windows.HWND {
-	getForegroundWindow := user32.NewProc("GetForegroundWindow")
-	ret, _, _ := getForegroundWindow.Call()
+	ret, _, _ := procGetForegroundWindow.Call()
 	return windows.HWND(ret)
 }
 
 func getWindowText(hwnd windows.HWND) string {
-	getWindowTextW := user32.NewProc("GetWindowTextW")
-
 	const maxChars = 256
 	text := make([]uint16, maxChars)
-	ret, _, _ := getWindowTextW.Call(
+	ret, _, _ := procGetWindowTextW.Call(
 		uintptr(hwnd),
 		uintptr(unsafe.Pointer(&text[0])),
 		uintptr(maxChars),
@@ -104,12 +112,9 @@ func getProcessName(processID uint32) string {
 	}
 	defer closeHandle.Call(handle)
 
-	psapi := syscall.NewLazyDLL("psapi.dll")
-	getModuleBaseNameW := psapi.NewProc("GetModuleBaseNameW")
-
 	const maxPath = 260
 	var processName [maxPath]uint16
-	ret, _, _ := getModuleBaseNameW.Call(
+	ret, _, _ := procGetModuleBaseNameW.Call(
 		handle,
 		0,
 		uintptr(unsafe.Pointer(&processName[0])),
@@ -131,7 +136,9 @@ func ExtractMeetingSubject(title string) string {
 }
 
 func ProcessWindowInfo(inactivityThreshold uint64, privateMode bool, debugMode bool,
-	focusChangeCounter, focusedWindowDuration, meetingDuration, inactivityMetric *prometheus.CounterVec, windowPidGauge *prometheus.GaugeVec) {
+	focusChangeCounter, focusedWindowDuration, meetingDuration, inactivityMetric *prometheus.CounterVec, windowPidGauge *prometheus.GaugeVec,
+	tracker FocusTracker,
+) {
 	windowInfo, err := GetActiveWindowInfo(*focusChangeCounter)
 	if err != nil {
 		if debugMode {
@@ -159,6 +166,12 @@ func ProcessWindowInfo(inactivityThreshold uint64, privateMode bool, debugMode b
 	windowPidGauge.Reset()
 	windowPidGauge.WithLabelValues(windowInfo.Hostname, windowInfo.Username, windowTitle, windowInfo.ProcessName).Set(float64(windowInfo.ProcessID))
 
+	now := time.Now()
+
+	if tracker != nil {
+		tracker.RecordFocus(windowInfo.Hostname, windowInfo.Username, windowInfo.ProcessName, windowInfo.Title, now)
+	}
+
 	if windowInfo != LastWindowInfo {
 		duration := time.Since(LastWindowFocusTime).Seconds()
 		focusedWindowDuration.WithLabelValues(LastWindowInfo.Hostname, LastWindowInfo.Username, LastWindowInfo.ProcessName).Add(duration)
@@ -169,7 +182,7 @@ func ProcessWindowInfo(inactivityThreshold uint64, privateMode bool, debugMode b
 		}
 
 		LastWindowInfo = windowInfo
-		LastWindowFocusTime = time.Now()
+		LastWindowFocusTime = now
 	}
 
 	inactivityTime, shouldIncrementCounter := inactivity.GetInactivityTime(inactivityThreshold)
@@ -179,5 +192,10 @@ func ProcessWindowInfo(inactivityThreshold uint64, privateMode bool, debugMode b
 
 	if shouldIncrementCounter {
 		inactivityMetric.WithLabelValues(windowInfo.Hostname, windowInfo.Username).Inc()
+		if tracker != nil {
+			tracker.RecordInactivityStart(now)
+		}
+	} else if tracker != nil {
+		tracker.RecordInactivityEnd(windowInfo.Hostname, windowInfo.Username, now)
 	}
 }

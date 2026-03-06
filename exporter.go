@@ -1,18 +1,25 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
-	"github.com/vinistoisr/focus-exporter/internal/windowinfo"
+	"github.com/vinistoisr/timewarp/internal/db"
+	"github.com/vinistoisr/timewarp/internal/mcp"
+	"github.com/vinistoisr/timewarp/internal/tray"
+	"github.com/vinistoisr/timewarp/internal/windowinfo"
 )
 
 // Command-line flags
@@ -22,6 +29,11 @@ var (
 	listenPort             int
 	privateMode            bool
 	debugMode              bool
+	mcpMode                bool
+	silentMode             bool
+	installMode            bool
+	uninstallMode          bool
+	dbpath                 string
 )
 
 // Prometheus metrics
@@ -67,6 +79,23 @@ var (
 	)
 )
 
+var (
+	trackerMu sync.Mutex
+	tracker   *db.Tracker
+)
+
+func getTracker() *db.Tracker {
+	trackerMu.Lock()
+	defer trackerMu.Unlock()
+	return tracker
+}
+
+func setTracker(t *db.Tracker) {
+	trackerMu.Lock()
+	defer trackerMu.Unlock()
+	tracker = t
+}
+
 func init() {
 	// Load Environment Variables or use defaults
 	inactivityThresholdSec, _ = strconv.ParseUint(os.Getenv("INACTIVITY_THRESHOLD_SEC"), 10, 64)
@@ -78,14 +107,17 @@ func init() {
 	debugMode = os.Getenv("DEBUG_MODE") == "true"
 	listenPort = 9183 // default port
 
-	// Parse command-line flags, will override environment variables if set
+	// Register command-line flags (parsed in main)
 	flag.Uint64Var(&inactivityThresholdSec, "inactivityThreshold", inactivityThresholdSec, "The inactivity threshold in seconds")
 	flag.StringVar(&listenInterface, "interface", listenInterface, "The interface to listen on (default is all interfaces)")
 	flag.IntVar(&listenPort, "port", listenPort, "The port to listen on (default is 9183)")
 	flag.BoolVar(&privateMode, "private", privateMode, "When true, the window title will be replaced with the process name for increased privacy")
 	flag.BoolVar(&debugMode, "debug", debugMode, "When true, output all values to the console")
-
-	flag.Parse()
+	flag.BoolVar(&mcpMode, "mcp", false, "Run as MCP stdio server instead of Prometheus exporter")
+	flag.BoolVar(&silentMode, "silent", false, "Run without system tray icon")
+	flag.BoolVar(&installMode, "install", false, "Install as a startup task (runs at logon)")
+	flag.BoolVar(&uninstallMode, "uninstall", false, "Remove the startup task")
+	flag.StringVar(&dbpath, "dbpath", "", "Directory for DB file(s) (default: same directory as the executable)")
 }
 
 // setupMetrics initializes the Prometheus metrics and returns the registry
@@ -98,27 +130,36 @@ func setupMetrics() *prometheus.Registry {
 	reg.MustRegister(focusedWindowDuration)
 	reg.MustRegister(meetingDuration)
 	return reg
-
 }
 
 // startHTTPServer starts the HTTP server to expose the Prometheus metrics
 func startHTTPServer(reg *prometheus.Registry, listenAddress string) {
 	go func() {
 		if err := http.ListenAndServe(listenAddress, promhttp.HandlerFor(reg, promhttp.HandlerOpts{})); err != nil {
-			fmt.Printf("Error starting HTTP server: %v\n", err)
+			log.Printf("Error starting HTTP server: %v", err)
 		}
 	}()
 }
 
-func main() {
-	flag.Parse()
+func runExporter(ctx context.Context) {
+	path := dbpath
+	if path == "" {
+		path = db.ExeDir()
+	}
 
-	// Always output the initial flag values
-	fmt.Printf("Inactivity Threshold: %d seconds\n", inactivityThresholdSec)
-	fmt.Printf("Listening Interface: %s\n", listenInterface)
-	fmt.Printf("Listening Port: %d\n", listenPort)
-	fmt.Printf("Private Mode: %v\n", privateMode)
-	fmt.Printf("Debug Mode: %v\n", debugMode)
+	t, err := db.Open(path)
+	if err != nil {
+		log.Printf("Warning: DB tracking disabled: %v", err)
+	} else {
+		setTracker(t)
+		log.Printf("DB path: %s", path)
+	}
+
+	log.Printf("Inactivity Threshold: %d seconds", inactivityThresholdSec)
+	log.Printf("Listening Interface: %s", listenInterface)
+	log.Printf("Listening Port: %d", listenPort)
+	log.Printf("Private Mode: %v", privateMode)
+	log.Printf("Debug Mode: %v", debugMode)
 
 	inactivityThreshold := inactivityThresholdSec * 1000
 	listenAddress := fmt.Sprintf("%s:%d", listenInterface, listenPort)
@@ -134,8 +175,111 @@ func main() {
 
 	for {
 		select {
+		case <-ctx.Done():
+			return
 		case <-ticker.C:
-			windowinfo.ProcessWindowInfo(inactivityThreshold, privateMode, debugMode, focusChangeCounter, focusedWindowDuration, meetingDuration, inactivityMetric, windowPidGauge)
+			// Avoid nil-interface trap: only pass tracker as interface when non-nil
+			cur := getTracker()
+			var ti windowinfo.FocusTracker
+			if cur != nil {
+				ti = cur
+			}
+			windowinfo.ProcessWindowInfo(inactivityThreshold, privateMode, debugMode, focusChangeCounter, focusedWindowDuration, meetingDuration, inactivityMetric, windowPidGauge, ti)
 		}
 	}
+}
+
+func doInstall() error {
+	exePath, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("could not determine executable path: %w", err)
+	}
+
+	tr := `"` + exePath + `"`
+	if dbpath != "" {
+		tr += ` -dbpath "` + dbpath + `"`
+	}
+
+	cmd := exec.Command("schtasks", "/create",
+		"/tn", "Timewarp",
+		"/tr", tr,
+		"/sc", "onlogon",
+		"/rl", "limited",
+		"/delay", "0000:30",
+		"/f",
+	)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("schtasks create failed: %w", err)
+	}
+	fmt.Println("Timewarp installed as a startup task.")
+	return nil
+}
+
+func doUninstall() error {
+	cmd := exec.Command("schtasks", "/delete", "/tn", "Timewarp", "/f")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("schtasks delete failed: %w", err)
+	}
+	fmt.Println("Timewarp startup task removed.")
+	return nil
+}
+
+func main() {
+	flag.Parse()
+
+	if installMode {
+		if err := doInstall(); err != nil {
+			fmt.Fprintf(os.Stderr, "Install error: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	if uninstallMode {
+		if err := doUninstall(); err != nil {
+			fmt.Fprintf(os.Stderr, "Uninstall error: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	if mcpMode {
+		path := dbpath
+		if path == "" {
+			path = db.ExeDir()
+		}
+		if err := mcp.Run(path); err != nil {
+			fmt.Fprintf(os.Stderr, "MCP server error: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	if silentMode {
+		runExporter(ctx)
+		cancel()
+		return
+	}
+
+	// Default: run with system tray icon
+	path := dbpath
+	if path == "" {
+		path = db.ExeDir()
+	}
+	tray.Run(path, func() {
+		go runExporter(ctx)
+	}, func() {
+		cancel()
+		// Wait briefly for exporter goroutine to stop
+		time.Sleep(100 * time.Millisecond)
+		if t := getTracker(); t != nil {
+			t.Close()
+		}
+	})
 }

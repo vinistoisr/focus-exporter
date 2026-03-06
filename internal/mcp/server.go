@@ -77,6 +77,17 @@ var tools = []toolDef{
 			}
 		}`),
 	},
+	{
+		Name:        "get_daily_breakdown",
+		Description: "Get focus time grouped by date, with project attribution, sample titles, and meetings per day. Ideal for generating QuickBooks Time entries or daily timecards.",
+		InputSchema: json.RawMessage(`{
+			"type": "object",
+			"properties": {
+				"date_from": {"type": "string", "description": "Start date (ISO, e.g. 2026-03-02). Defaults to current week Monday."},
+				"date_to": {"type": "string", "description": "End date (ISO, e.g. 2026-03-08). Defaults to Sunday after date_from."}
+			}
+		}`),
+	},
 }
 
 // Run starts the MCP stdio server. It reads JSON-RPC 2.0 requests from stdin
@@ -171,6 +182,8 @@ func handleToolCall(dbpath string, req *jsonRPCRequest) {
 		result, err = callGetFocusTime(dbpath, params.Arguments)
 	case "list_top_apps":
 		result, err = callListTopApps(dbpath, params.Arguments)
+	case "get_daily_breakdown":
+		result, err = callGetDailyBreakdown(dbpath, params.Arguments)
 	default:
 		toolResult := map[string]interface{}{
 			"content": []map[string]string{
@@ -268,6 +281,40 @@ func callListTopApps(dbpath string, args json.RawMessage) (json.RawMessage, erro
 	}
 
 	return db.ListTopApps(dbpath, weekStart)
+}
+
+func callGetDailyBreakdown(dbpath string, args json.RawMessage) (json.RawMessage, error) {
+	var a struct {
+		DateFrom string `json:"date_from"`
+		DateTo   string `json:"date_to"`
+	}
+	if len(args) > 0 {
+		json.Unmarshal(args, &a)
+	}
+
+	var dateFrom time.Time
+	if a.DateFrom == "" {
+		dateFrom = db.CurrentWeekMonday()
+	} else {
+		var err error
+		dateFrom, err = time.Parse("2006-01-02", a.DateFrom)
+		if err != nil {
+			return nil, fmt.Errorf("invalid date_from: %w", err)
+		}
+	}
+
+	var dateTo time.Time
+	if a.DateTo == "" {
+		dateTo = dateFrom.AddDate(0, 0, 7)
+	} else {
+		var err error
+		dateTo, err = time.Parse("2006-01-02", a.DateTo)
+		if err != nil {
+			return nil, fmt.Errorf("invalid date_to: %w", err)
+		}
+	}
+
+	return db.GetDailyBreakdown(dbpath, dateFrom, dateTo)
 }
 
 func writeResult(id json.RawMessage, result interface{}) {

@@ -380,6 +380,179 @@ func ExeDir() string {
 	return filepath.Dir(exe)
 }
 
+type DailyBreakdown struct {
+	DateFrom string             `json:"date_from"`
+	DateTo   string             `json:"date_to"`
+	Days     []DayEntry         `json:"days"`
+}
+
+type DayEntry struct {
+	Date              string              `json:"date"`
+	Attributed        []AttributedProject `json:"attributed"`
+	Unattributed      []UnattributedApp   `json:"unattributed"`
+	Meetings          []MeetingSummary    `json:"meetings"`
+	InactivityMinutes float64             `json:"inactivity_minutes"`
+	TotalMinutes      float64             `json:"total_minutes"`
+}
+
+func GetDailyBreakdown(dbpath string, dateFrom, dateTo time.Time) (json.RawMessage, error) {
+	dbs, err := openAllDBs(dbpath)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		for _, d := range dbs {
+			d.Close()
+		}
+	}()
+
+	var days []DayEntry
+	for d := dateFrom; d.Before(dateTo); d = d.AddDate(0, 0, 1) {
+		dayStart := d.Format("2006-01-02 15:04:05")
+		dayEnd := d.AddDate(0, 0, 1).Format("2006-01-02 15:04:05")
+
+		type projAgg struct {
+			minutes   float64
+			processes map[string]bool
+			titles    []string
+		}
+		attributed := map[string]*projAgg{}
+
+		type appAgg struct {
+			minutes float64
+			titles  []string
+		}
+		unattributed := map[string]*appAgg{}
+
+		type mtgAgg struct {
+			minutes  float64
+			sessions int
+		}
+		meetings := map[string]*mtgAgg{}
+
+		var totalInactivity float64
+
+		for _, db := range dbs {
+			rows, err := db.Query(`SELECT process_name, window_title, project_number, duration_seconds FROM focus_events WHERE started_at >= ? AND started_at < ?`, dayStart, dayEnd)
+			if err == nil {
+				for rows.Next() {
+					var proc, title string
+					var projNum sql.NullString
+					var dur float64
+					rows.Scan(&proc, &title, &projNum, &dur)
+					mins := dur / 60.0
+
+					if projNum.Valid && projNum.String != "" {
+						agg, ok := attributed[projNum.String]
+						if !ok {
+							agg = &projAgg{processes: map[string]bool{}}
+							attributed[projNum.String] = agg
+						}
+						agg.minutes += mins
+						agg.processes[proc] = true
+						if len(agg.titles) < 3 {
+							agg.titles = append(agg.titles, title)
+						}
+					} else {
+						agg, ok := unattributed[proc]
+						if !ok {
+							agg = &appAgg{}
+							unattributed[proc] = agg
+						}
+						agg.minutes += mins
+						if len(agg.titles) < 3 {
+							agg.titles = append(agg.titles, title)
+						}
+					}
+				}
+				rows.Close()
+			}
+
+			rows, err = db.Query(`SELECT subject, duration_seconds FROM meeting_sessions WHERE started_at >= ? AND started_at < ?`, dayStart, dayEnd)
+			if err == nil {
+				for rows.Next() {
+					var subj string
+					var dur float64
+					rows.Scan(&subj, &dur)
+					agg, ok := meetings[subj]
+					if !ok {
+						agg = &mtgAgg{}
+						meetings[subj] = agg
+					}
+					agg.minutes += dur / 60.0
+					agg.sessions++
+				}
+				rows.Close()
+			}
+
+			row := db.QueryRow(`SELECT COALESCE(SUM(duration_seconds), 0) FROM inactivity_periods WHERE started_at >= ? AND started_at < ?`, dayStart, dayEnd)
+			var inact float64
+			if row.Scan(&inact) == nil {
+				totalInactivity += inact / 60.0
+			}
+		}
+
+		var attrList []AttributedProject
+		for pn, agg := range attributed {
+			var procs []string
+			for p := range agg.processes {
+				procs = append(procs, p)
+			}
+			attrList = append(attrList, AttributedProject{
+				ProjectNumber: pn,
+				TotalMinutes:  round1(agg.minutes),
+				Processes:     procs,
+				SampleTitles:  agg.titles,
+			})
+		}
+
+		var unattrList []UnattributedApp
+		for proc, agg := range unattributed {
+			unattrList = append(unattrList, UnattributedApp{
+				Process:      proc,
+				TotalMinutes: round1(agg.minutes),
+				SampleTitles: agg.titles,
+			})
+		}
+
+		var mtgList []MeetingSummary
+		for subj, agg := range meetings {
+			mtgList = append(mtgList, MeetingSummary{
+				Subject:      subj,
+				TotalMinutes: round1(agg.minutes),
+				Sessions:     agg.sessions,
+			})
+		}
+
+		var totalMins float64
+		for _, a := range attrList {
+			totalMins += a.TotalMinutes
+		}
+		for _, u := range unattrList {
+			totalMins += u.TotalMinutes
+		}
+		for _, m := range mtgList {
+			totalMins += m.TotalMinutes
+		}
+
+		days = append(days, DayEntry{
+			Date:              d.Format("2006-01-02"),
+			Attributed:        attrList,
+			Unattributed:      unattrList,
+			Meetings:          mtgList,
+			InactivityMinutes: round1(totalInactivity),
+			TotalMinutes:      round1(totalMins),
+		})
+	}
+
+	result := DailyBreakdown{
+		DateFrom: dateFrom.Format("2006-01-02"),
+		DateTo:   dateTo.Format("2006-01-02"),
+		Days:     days,
+	}
+	return json.Marshal(result)
+}
+
 func round1(f float64) float64 {
 	return math.Round(f*10) / 10
 }

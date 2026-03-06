@@ -107,15 +107,15 @@ func TestToolsList(t *testing.T) {
 	}
 	json.Unmarshal(resp.Result, &result)
 
-	if len(result.Tools) != 3 {
-		t.Fatalf("expected 3 tools, got %d", len(result.Tools))
+	if len(result.Tools) != 4 {
+		t.Fatalf("expected 4 tools, got %d", len(result.Tools))
 	}
 
 	names := map[string]bool{}
 	for _, tool := range result.Tools {
 		names[tool.Name] = true
 	}
-	for _, expected := range []string{"get_weekly_summary", "get_focus_time", "list_top_apps"} {
+	for _, expected := range []string{"get_weekly_summary", "get_focus_time", "list_top_apps", "get_daily_breakdown"} {
 		if !names[expected] {
 			t.Errorf("missing tool: %s", expected)
 		}

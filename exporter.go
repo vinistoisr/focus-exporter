@@ -9,13 +9,16 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
+	"unsafe"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"golang.org/x/sys/windows"
 
 	"github.com/vinistoisr/timewarp/internal/db"
 	"github.com/vinistoisr/timewarp/internal/mcp"
@@ -81,10 +84,14 @@ var (
 )
 
 var (
-	trackerMu sync.Mutex
-	tracker   *db.Tracker
-	paused    atomic.Bool
+	trackerMu        sync.Mutex
+	tracker          *db.Tracker
+	paused           atomic.Bool
 	inactThresholdMs atomic.Uint64
+
+	promMu     sync.Mutex
+	promServer *http.Server
+	promReg    *prometheus.Registry
 )
 
 func getTracker() *db.Tracker {
@@ -135,13 +142,46 @@ func setupMetrics() *prometheus.Registry {
 	return reg
 }
 
-// startHTTPServer starts the HTTP server to expose the Prometheus metrics
-func startHTTPServer(reg *prometheus.Registry, listenAddress string) {
+func startPrometheus() error {
+	promMu.Lock()
+	defer promMu.Unlock()
+
+	if promServer != nil {
+		return nil // already running
+	}
+
+	if promReg == nil {
+		promReg = setupMetrics()
+	}
+
+	addr := fmt.Sprintf("%s:%d", listenInterface, listenPort)
+	promServer = &http.Server{
+		Addr:    addr,
+		Handler: promhttp.HandlerFor(promReg, promhttp.HandlerOpts{}),
+	}
+
 	go func() {
-		if err := http.ListenAndServe(listenAddress, promhttp.HandlerFor(reg, promhttp.HandlerOpts{})); err != nil {
-			log.Printf("Error starting HTTP server: %v", err)
+		log.Printf("Prometheus endpoint started on %s", addr)
+		if err := promServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Printf("Prometheus server error: %v", err)
 		}
 	}()
+	return nil
+}
+
+func stopPrometheus() {
+	promMu.Lock()
+	defer promMu.Unlock()
+
+	if promServer == nil {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	promServer.Shutdown(ctx)
+	promServer = nil
+	log.Printf("Prometheus endpoint stopped")
 }
 
 func runExporter(ctx context.Context) {
@@ -162,15 +202,15 @@ func runExporter(ctx context.Context) {
 	inactThresholdMs.Store(inactivityThresholdSec * 1000)
 
 	log.Printf("Inactivity Threshold: %d seconds", inactivityThresholdSec)
-	log.Printf("Listening Interface: %s", listenInterface)
-	log.Printf("Listening Port: %d", listenPort)
 	log.Printf("Private Mode: %v", privateMode)
 	log.Printf("Debug Mode: %v", debugMode)
 
-	listenAddress := fmt.Sprintf("%s:%d", listenInterface, listenPort)
-
-	reg := setupMetrics()
-	startHTTPServer(reg, listenAddress)
+	// Initialize metrics registry (but don't start the server — user toggles it via tray)
+	promMu.Lock()
+	if promReg == nil {
+		promReg = setupMetrics()
+	}
+	promMu.Unlock()
 
 	windowinfo.LastWindowInfo, _ = windowinfo.GetActiveWindowInfo(*focusChangeCounter)
 	windowinfo.LastWindowFocusTime = time.Now()
@@ -197,7 +237,45 @@ func runExporter(ctx context.Context) {
 	}
 }
 
+// elevateAndRun re-launches the current exe with admin privileges via UAC prompt.
+func elevateAndRun() error {
+	exe, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("could not determine executable path: %w", err)
+	}
+
+	args := strings.Join(os.Args[1:], " ")
+
+	verbPtr, _ := windows.UTF16PtrFromString("runas")
+	exePtr, _ := windows.UTF16PtrFromString(exe)
+	argsPtr, _ := windows.UTF16PtrFromString(args)
+
+	err = windows.ShellExecute(0, verbPtr, exePtr, argsPtr, nil, windows.SW_NORMAL)
+	if err != nil {
+		return fmt.Errorf("UAC elevation failed: %w", err)
+	}
+	return nil
+}
+
+// isElevated checks if the current process has admin privileges.
+func isElevated() bool {
+	token := windows.GetCurrentProcessToken()
+	elevated := false
+	var elevation struct{ TokenIsElevated uint32 }
+	var size uint32
+	err := windows.GetTokenInformation(token, windows.TokenElevation, (*byte)(unsafe.Pointer(&elevation)), uint32(unsafe.Sizeof(elevation)), &size)
+	if err == nil && elevation.TokenIsElevated != 0 {
+		elevated = true
+	}
+	return elevated
+}
+
 func doInstall() error {
+	if !isElevated() {
+		fmt.Println("Requesting administrator privileges...")
+		return elevateAndRun()
+	}
+
 	exePath, err := os.Executable()
 	if err != nil {
 		return fmt.Errorf("could not determine executable path: %w", err)
@@ -226,6 +304,11 @@ func doInstall() error {
 }
 
 func doUninstall() error {
+	if !isElevated() {
+		fmt.Println("Requesting administrator privileges...")
+		return elevateAndRun()
+	}
+
 	cmd := exec.Command("schtasks", "/delete", "/tn", "Timewarp", "/f")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -286,6 +369,7 @@ func main() {
 		},
 		OnQuit: func() {
 			cancel()
+			stopPrometheus()
 			time.Sleep(100 * time.Millisecond)
 			if t := getTracker(); t != nil {
 				t.Close()
@@ -300,6 +384,50 @@ func main() {
 		SetInactivityThreshold: func(seconds uint64) {
 			inactThresholdMs.Store(seconds * 1000)
 			log.Printf("Inactivity threshold changed to %d seconds", seconds)
+		},
+		OnPrometheusToggle: func(enable bool) {
+			if enable {
+				startPrometheus()
+			} else {
+				stopPrometheus()
+			}
+		},
+		GetMCPConfig: func() string {
+			exePath, err := os.Executable()
+			if err != nil {
+				return `{"error": "could not determine executable path"}`
+			}
+			p := dbpath
+			if p == "" {
+				p = db.ExeDir()
+			}
+			// Escape backslashes for JSON
+			exeEsc := strings.ReplaceAll(exePath, `\`, `\\`)
+			pathEsc := strings.ReplaceAll(p, `\`, `\\`)
+			return fmt.Sprintf(`{
+  "mcpServers": {
+    "timewarp": {
+      "command": "%s",
+      "args": ["-mcp", "-dbpath", "%s"]
+    }
+  }
+}`, exeEsc, pathEsc)
+		},
+		OnSetDBPath: func(newPath string) {
+			// Close old tracker
+			if t := getTracker(); t != nil {
+				t.Close()
+				setTracker(nil)
+			}
+			// Open new tracker
+			t, err := db.Open(newPath)
+			if err != nil {
+				log.Printf("Failed to open DB at %s: %v", newPath, err)
+				return
+			}
+			setTracker(t)
+			dbpath = newPath
+			log.Printf("DB path changed to: %s", newPath)
 		},
 	})
 }

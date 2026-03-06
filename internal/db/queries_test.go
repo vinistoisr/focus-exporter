@@ -210,6 +210,68 @@ func TestParseWeekStart_NotMonday(t *testing.T) {
 	}
 }
 
+func TestGetDailyBreakdown(t *testing.T) {
+	dir := t.TempDir()
+	seedTestDB(t, dir, "DESKTOP-TEST")
+
+	from := time.Date(2026, 3, 2, 0, 0, 0, 0, time.UTC)
+	to := time.Date(2026, 3, 4, 0, 0, 0, 0, time.UTC) // 2 days: Mon + Tue
+
+	raw, err := GetDailyBreakdown(dir, from, to)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var result DailyBreakdown
+	if err := json.Unmarshal(raw, &result); err != nil {
+		t.Fatal(err)
+	}
+
+	if result.DateFrom != "2026-03-02" || result.DateTo != "2026-03-04" {
+		t.Errorf("unexpected date range: %s - %s", result.DateFrom, result.DateTo)
+	}
+
+	if len(result.Days) != 2 {
+		t.Fatalf("expected 2 days, got %d", len(result.Days))
+	}
+
+	// All seed data is on Monday 2026-03-02
+	mon := result.Days[0]
+	if mon.Date != "2026-03-02" {
+		t.Errorf("expected 2026-03-02, got %s", mon.Date)
+	}
+	if len(mon.Attributed) != 1 {
+		t.Fatalf("expected 1 attributed project on Monday, got %d", len(mon.Attributed))
+	}
+	if mon.Attributed[0].ProjectNumber != "25-125" {
+		t.Errorf("expected project 25-125, got %s", mon.Attributed[0].ProjectNumber)
+	}
+	if mon.Attributed[0].TotalMinutes != 150 {
+		t.Errorf("expected 150 minutes for 25-125, got %v", mon.Attributed[0].TotalMinutes)
+	}
+	if len(mon.Unattributed) != 1 {
+		t.Fatalf("expected 1 unattributed app on Monday, got %d", len(mon.Unattributed))
+	}
+	if len(mon.Meetings) != 1 {
+		t.Fatalf("expected 1 meeting on Monday, got %d", len(mon.Meetings))
+	}
+	if mon.InactivityMinutes != 30 {
+		t.Errorf("expected 30 min inactivity on Monday, got %v", mon.InactivityMinutes)
+	}
+	if mon.TotalMinutes == 0 {
+		t.Error("expected non-zero total minutes on Monday")
+	}
+
+	// Tuesday should be empty
+	tue := result.Days[1]
+	if tue.Date != "2026-03-03" {
+		t.Errorf("expected 2026-03-03, got %s", tue.Date)
+	}
+	if tue.TotalMinutes != 0 {
+		t.Errorf("expected 0 minutes on Tuesday, got %v", tue.TotalMinutes)
+	}
+}
+
 func TestGetWeeklySummary_EmptyDir(t *testing.T) {
 	dir := t.TempDir()
 	weekStart := time.Date(2026, 3, 2, 0, 0, 0, 0, time.UTC)

@@ -4,19 +4,24 @@ import (
 	"fmt"
 	"os/exec"
 	"runtime"
+	"strings"
 	"sync/atomic"
+	"time"
 
 	"github.com/getlantern/systray"
 )
 
 // Callbacks allows the main app to wire up tray actions.
 type Callbacks struct {
-	OnReady  func()
-	OnQuit   func()
-	OnPause  func()
-	OnResume func()
-	// SetInactivityThreshold is called with the new threshold in seconds.
+	OnReady                func()
+	OnQuit                 func()
+	OnPause                func()
+	OnResume               func()
 	SetInactivityThreshold func(seconds uint64)
+	OnPrometheusToggle     func(enable bool)
+	OnSetDBPath            func(path string)
+	// GetMCPConfig returns the MCP JSON config string.
+	GetMCPConfig           func() string
 }
 
 // Run starts the system tray icon. It blocks until quit.
@@ -53,12 +58,19 @@ func Run(dbpath string, cb Callbacks) {
 			item := systray.AddMenuItem("  "+t.label, fmt.Sprintf("Set inactivity threshold to %s", t.label))
 			thresholdItems = append(thresholdItems, item)
 		}
-		// Default: check 1 minute (index 1)
 		thresholdItems[1].Check()
 
 		systray.AddSeparator()
 
+		mProm := systray.AddMenuItem("Enable Prometheus Endpoint", "Expose metrics on HTTP (off by default)")
+		var promEnabled atomic.Bool
+
+		systray.AddSeparator()
+
 		mOpenDB := systray.AddMenuItem("Open DB Folder", "Open the database folder in Explorer")
+		mSetDB := systray.AddMenuItem("Set DB Folder...", "Choose a folder for database files")
+		systray.AddSeparator()
+		mCopyMCP := systray.AddMenuItem("Copy MCP Config", "Copy MCP server config JSON to clipboard")
 		systray.AddSeparator()
 		mQuit := systray.AddMenuItem("Quit", "Stop Timewarp")
 
@@ -97,8 +109,43 @@ func Run(dbpath string, cb Callbacks) {
 				case <-thresholdItems[4].ClickedCh:
 					selectThreshold(thresholdItems, 4, thresholds[4].seconds, cb.SetInactivityThreshold)
 
+				case <-mProm.ClickedCh:
+					if promEnabled.Load() {
+						promEnabled.Store(false)
+						mProm.SetTitle("Enable Prometheus Endpoint")
+						mProm.Uncheck()
+						if cb.OnPrometheusToggle != nil {
+							cb.OnPrometheusToggle(false)
+						}
+					} else {
+						promEnabled.Store(true)
+						mProm.SetTitle("Disable Prometheus Endpoint")
+						mProm.Check()
+						if cb.OnPrometheusToggle != nil {
+							cb.OnPrometheusToggle(true)
+						}
+					}
+
+				case <-mCopyMCP.ClickedCh:
+					if cb.GetMCPConfig != nil {
+						cfg := cb.GetMCPConfig()
+						if copyToClipboard(cfg) {
+							mCopyMCP.SetTitle("Copied!")
+							go func() {
+								time.Sleep(2 * time.Second)
+								mCopyMCP.SetTitle("Copy MCP Config")
+							}()
+						}
+					}
 				case <-mOpenDB.ClickedCh:
 					openFolder(dbpath)
+				case <-mSetDB.ClickedCh:
+					if picked := pickFolder(); picked != "" {
+						dbpath = picked
+						if cb.OnSetDBPath != nil {
+							cb.OnSetDBPath(picked)
+						}
+					}
 				case <-mQuit.ClickedCh:
 					if cb.OnQuit != nil {
 						cb.OnQuit()
@@ -126,6 +173,33 @@ func selectThreshold(items []*systray.MenuItem, selected int, seconds uint64, se
 	if setter != nil {
 		setter(seconds)
 	}
+}
+
+func copyToClipboard(text string) bool {
+	if runtime.GOOS != "windows" {
+		return false
+	}
+	cmd := exec.Command("clip.exe")
+	cmd.Stdin = strings.NewReader(text)
+	return cmd.Run() == nil
+}
+
+func pickFolder() string {
+	if runtime.GOOS != "windows" {
+		return ""
+	}
+	cmd := exec.Command("powershell", "-NoProfile", "-Command",
+		`Add-Type -AssemblyName System.Windows.Forms; `+
+			`$d = New-Object System.Windows.Forms.FolderBrowserDialog; `+
+			`$d.Description = 'Select Timewarp DB folder'; `+
+			`$d.ShowNewFolderButton = $true; `+
+			`if ($d.ShowDialog() -eq 'OK') { $d.SelectedPath }`)
+	out, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	result := strings.TrimSpace(string(out))
+	return result
 }
 
 func openFolder(path string) {

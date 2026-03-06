@@ -39,6 +39,8 @@ On the first launch, Timewarp walks you through setup automatically:
 1. **Choose a data folder** — A dialog explains your options and opens a folder picker. Pick a folder inside OneDrive if you use multiple computers (each PC saves its own file, no sync conflicts), or any local folder if you only use one machine.
 2. **Start at login** — Timewarp asks if you want it to run automatically when you log in. If you click Yes, a UAC prompt will appear (it needs admin rights to create the scheduled task). You can remove this later with `timewarp.exe -uninstall`.
 
+> **Don't have admin rights?** Skip the UAC prompt and instead create a shortcut to `timewarp.exe` in your Startup folder. Press `Win+R`, type `shell:startup`, and drag the shortcut there. It works the same way — Timewarp will start every time you log in.
+
 After setup, a small purple clock icon appears in your system tray — Timewarp is now tracking.
 
 ### Step 3: Connect to your AI app

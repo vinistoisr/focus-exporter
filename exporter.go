@@ -350,6 +350,28 @@ func main() {
 		return
 	}
 
+	// Onboarding: first-run DB folder selection
+	if dbpath == "" && !silentMode {
+		defaultDir := db.ExeDir()
+		if !tray.HasExistingDB(defaultDir) {
+			picked := tray.RunOnboarding()
+			if picked == "" {
+				fmt.Fprintln(os.Stderr, "No folder selected. Exiting.")
+				os.Exit(0)
+			}
+			dbpath = picked
+		}
+	}
+
+	// Onboarding: offer to create scheduled task
+	if !silentMode && !tray.HasScheduledTask() {
+		if tray.OfferScheduledTask() {
+			if err := doInstall(); err != nil {
+				log.Printf("Failed to create scheduled task: %v", err)
+			}
+		}
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 
 	if silentMode {

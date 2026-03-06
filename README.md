@@ -48,42 +48,20 @@ graph LR
 
 ## Installation
 
-### Step 1: Download
+### Step 1: Download and run
 
-Download `timewarp.exe` from the [latest release](https://github.com/vinistoisr/timewarp/releases/latest) and put it somewhere permanent (e.g. `C:\Tools\Timewarp\timewarp.exe`).
+Download `timewarp.exe` from the [latest release](https://github.com/vinistoisr/timewarp/releases/latest), put it somewhere permanent (e.g. `C:\Tools\Timewarp\timewarp.exe`), and double-click it.
 
-### Step 2: Choose a database folder
+### Step 2: First-run setup
 
-Timewarp stores your data in a folder you choose. You have two options:
+On the first launch, Timewarp walks you through setup automatically:
 
-| Option | Path example | Why |
-|--------|-------------|-----|
-| **Local only** | `C:\Users\You\TimewarpData` | Simple. Data stays on this PC. |
-| **OneDrive** (recommended) | `C:\Users\You\OneDrive\TimewarpData` | Syncs across your work laptop and desktop automatically. Each machine writes its own file (`timewarp-DESKTOP.db`, `timewarp-LAPTOP.db`), so there are no sync conflicts. |
+1. **Choose a data folder** — A dialog explains your options and opens a folder picker. Pick a folder inside OneDrive if you use multiple computers (each PC saves its own file, no sync conflicts), or any local folder if you only use one machine.
+2. **Start at login** — Timewarp asks if you want it to run automatically when you log in. If you click Yes, a UAC prompt will appear (it needs admin rights to create the scheduled task). You can remove this later with `timewarp.exe -uninstall`.
 
-Create the folder now — Timewarp won't create it for you.
+After setup, a small purple clock icon appears in your system tray — Timewarp is now tracking.
 
-### Step 3: Run it
-
-Double-click `timewarp.exe`. A small purple clock icon appears in your system tray — Timewarp is now tracking.
-
-To set your database folder, right-click the tray icon and choose **Set DB Folder...**, then select the folder you created.
-
-### Step 4: Start at login (optional)
-
-Open a terminal and run:
-
-```
-timewarp.exe -install -dbpath "C:\Users\You\OneDrive\TimewarpData"
-```
-
-This creates a Windows scheduled task that starts Timewarp automatically when you log in. A UAC prompt will appear since it needs admin rights to create the task. To remove it later:
-
-```
-timewarp.exe -uninstall
-```
-
-### Step 5: Connect to Claude Desktop
+### Step 3: Connect to Claude Desktop
 
 This is what lets you ask Claude about your work. Right-click the tray icon and click **Copy MCP Config** — this copies the correct JSON to your clipboard.
 

@@ -314,6 +314,12 @@ func callGetDailyBreakdown(dbpath string, args json.RawMessage) (json.RawMessage
 		}
 	}
 
+	// When date_from == date_to the exclusive upper bound produces an empty range.
+	// Auto-increment date_to by one day so a single-day query returns data.
+	if dateTo.Equal(dateFrom) {
+		dateTo = dateFrom.AddDate(0, 0, 1)
+	}
+
 	return db.GetDailyBreakdown(dbpath, dateFrom, dateTo)
 }
 
